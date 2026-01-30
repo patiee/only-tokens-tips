@@ -167,6 +167,22 @@ func main() {
 		c.JSON(http.StatusOK, user)
 	})
 
+	// Public Profile Endpoint
+	r.GET("/api/user/:username", func(c *gin.Context) {
+		username := c.Param("username")
+		var user User
+		if result := db.Where("username = ?", username).First(&user); result.Error != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+
+		// Return only public info
+		c.JSON(http.StatusOK, gin.H{
+			"username":    user.Username,
+			"eth_address": user.EthAddress,
+		})
+	})
+
 	// API endpoint to receive tip notifications from frontend
 	r.POST("/api/tip", func(c *gin.Context) {
 		var tip TipRequest
