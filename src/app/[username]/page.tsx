@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
@@ -41,16 +41,28 @@ export default function ProfilePage() {
     const [amount, setAmount] = useState("");
     const [message, setMessage] = useState("");
     const [senderName, setSenderName] = useState("");
+    const [recipientAddress, setRecipientAddress] = useState<string | null>(null); // Added recipientAddress state
+
+    // Fetch streamer details
+    useEffect(() => { // Changed from useState to useEffect for side effects
+        fetch(`http://localhost:8080/api/user/${username}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.eth_address) {
+                    setRecipientAddress(data.eth_address);
+                }
+            })
+            .catch(console.error);
+    }, [username]); // Dependency array to refetch if username changes
 
     const handleSendTip = async () => {
-        if (!isConnected || !amount) return;
+        if (!isConnected || !amount || !recipientAddress) return; // Added !recipientAddress to condition
 
         try {
             const amountInUnits = parseUnits(amount, 6); // USDC has 6 decimals usually
 
-            // Recipient: In real app, fetch from backend. 
-            // Mock recipient (replace with your test wallet)
-            const RECIPIENT_ADDRESS = "0x7d206cd2e525f6c8d3505c6d32df1554fa40938456f4d805825e648342468301";
+            // Recipient from backend
+            const RECIPIENT_ADDRESS = recipientAddress as `0x${string}`; // Used recipientAddress state
 
             writeContract({
                 address: USDC_ADDRESS,
@@ -79,8 +91,8 @@ export default function ProfilePage() {
                                 key={val}
                                 onClick={() => setAmount(val)}
                                 className={`py-2 px-3 rounded-lg font-semibold transition-colors ${amount === val
-                                        ? "bg-blue-600 text-white"
-                                        : "bg-gray-700 hover:bg-gray-600 text-gray-200"
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-gray-700 hover:bg-gray-600 text-gray-200"
                                     }`}
                             >
                                 ${val}
@@ -118,8 +130,8 @@ export default function ProfilePage() {
                         onClick={handleSendTip}
                         disabled={!isConnected || !amount || isWritePending || isConfirming}
                         className={`w-full py-3 rounded-lg font-bold text-lg transition-all ${isConnected && amount
-                                ? "bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-                                : "bg-gray-600 cursor-not-allowed text-gray-400"
+                            ? "bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+                            : "bg-gray-600 cursor-not-allowed text-gray-400"
                             }`}
                     >
                         {isWritePending ? "Confirming in Wallet..." : isConfirming ? "Processing Transaction..." : "Send Tip"}
