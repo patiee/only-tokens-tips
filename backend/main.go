@@ -40,7 +40,18 @@ func main() {
 		logger.Fatalf("Database initialization failed: %v", err)
 	}
 
+	// Config
+	config := server.Config{
+		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		TwitchClientID:     os.Getenv("TWITCH_CLIENT_ID"),
+		TwitchClientSecret: os.Getenv("TWITCH_CLIENT_SECRET"),
+		KickClientID:       os.Getenv("KICK_CLIENT_ID"),
+		KickClientSecret:   os.Getenv("KICK_CLIENT_SECRET"),
+		JWTSecret:          os.Getenv("JWT_SECRET"),
+	}
+
 	// Init and Start Server
-	srv := server.New(logger, database)
+	srv := server.New(logger, database, config)
 	srv.Start(port)
 }

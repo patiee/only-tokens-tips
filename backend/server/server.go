@@ -14,7 +14,18 @@ import (
 	"github.com/patiee/backend/server/model"
 )
 
+type Config struct {
+	GoogleClientID     string
+	GoogleClientSecret string
+	TwitchClientID     string
+	TwitchClientSecret string
+	KickClientID       string
+	KickClientSecret   string
+	JWTSecret          string
+}
+
 type Server struct {
+	config    Config
 	logger    *log.Logger
 	db        *db.Database
 	clients   map[*websocket.Conn]bool
@@ -22,8 +33,9 @@ type Server struct {
 	upgrader  websocket.Upgrader
 }
 
-func New(logger *log.Logger, database *db.Database) *Server {
+func New(logger *log.Logger, database *db.Database, config Config) *Server {
 	return &Server{
+		config:  config,
 		logger:  logger,
 		db:      database,
 		clients: make(map[*websocket.Conn]bool),
@@ -36,6 +48,9 @@ func New(logger *log.Logger, database *db.Database) *Server {
 }
 
 func (s *Server) Start(port string) {
+	// Initialize OAuth
+	s.InitOAuth()
+
 	r := gin.Default()
 
 	// CORS configuration
@@ -50,6 +65,8 @@ func (s *Server) Start(port string) {
 	// Auth endpoints
 	r.POST("/auth/signup", s.HandleSignup)
 	r.POST("/auth/login", s.HandleLogin)
+	r.GET("/auth/:provider/login", s.HandleOAuthLogin)
+	r.GET("/auth/:provider/callback", s.HandleOAuthCallback)
 
 	// API endpoints
 	r.GET("/api/me", s.HandleMe)
@@ -69,6 +86,13 @@ func (s *Server) HandleSignup(c *gin.Context) {
 		return
 	}
 
+	// Verify Signup Token
+	claims, err := s.ValidateSignupToken(req.SignupToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid signup token"})
+		return
+	}
+
 	// Check if username exists
 	if _, err := s.db.GetUserByUsername(req.Username); err == nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "Username already taken"})
@@ -77,7 +101,10 @@ func (s *Server) HandleSignup(c *gin.Context) {
 
 	user := dbmodel.User{
 		Username:   req.Username,
-		Provider:   req.Provider,
+		Provider:   claims.Provider,
+		ProviderID: claims.ProviderID,
+		Email:      claims.Email,
+		AvatarURL:  claims.Avatar,
 		EthAddress: req.EthAddress,
 		MainWallet: req.MainWallet,
 		CreatedAt:  time.Now(),

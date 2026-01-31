@@ -1,17 +1,22 @@
 module github.com/patiee/backend
 
-go 1.23.4
+go 1.24.0
+
+toolchain go1.24.12
 
 require (
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.11.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/joho/godotenv v1.5.1
+	golang.org/x/oauth2 v0.34.0
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.31.1
 )
 
 require (
+	cloud.google.com/go/compute/metadata v0.3.0 // indirect
 	github.com/bytedance/sonic v1.14.0 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect

@@ -44,6 +44,14 @@ func (d *Database) GetUserByUsername(username string) (user *model.User, err err
 	return
 }
 
+func (d *Database) GetUserByProviderID(provider, providerID string) (user *model.User, err error) {
+	user = &model.User{}
+	if err = d.conn.Where("provider = ? AND provider_id = ?", provider, providerID).First(user).Error; err != nil {
+		return nil, err
+	}
+	return
+}
+
 func (d *Database) CreateUser(user *model.User) error {
 	return d.conn.Create(user).Error
 }

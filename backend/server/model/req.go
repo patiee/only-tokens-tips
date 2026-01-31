@@ -9,8 +9,8 @@ type TipRequest struct {
 }
 
 type SignupRequest struct {
-	Username   string `json:"username"`
-	Provider   string `json:"provider"`
-	EthAddress string `json:"eth_address"`
-	MainWallet bool   `json:"main_wallet"`
+	Username    string `json:"username"`
+	SignupToken string `json:"signup_token"` // JWT containing Provider, ProviderID, Email, Avatar
+	EthAddress  string `json:"eth_address"`
+	MainWallet  bool   `json:"main_wallet"`
 }
