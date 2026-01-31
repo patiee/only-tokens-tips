@@ -49,6 +49,8 @@ func main() {
 		KickClientID:       os.Getenv("KICK_CLIENT_ID"),
 		KickClientSecret:   os.Getenv("KICK_CLIENT_SECRET"),
 		JWTSecret:          os.Getenv("JWT_SECRET"),
+		CertFile:           os.Getenv("CERT_FILE"),
+		KeyFile:            os.Getenv("KEY_FILE"),
 	}
 
 	// Init and Start Server

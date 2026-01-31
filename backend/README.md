@@ -20,6 +20,23 @@ Configuration variables:
 - `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_HOST`, `DB_PORT`: Database credentials.
 - `JWT_SECRET`: Secret for signing JWTs.
 - `PORT`: Server port (default: 8080).
+- `GOOGLE_CLIENT_ID` & `GOOGLE_CLIENT_SECRET`: Google OAuth credentials.
+- `TWITCH_CLIENT_ID` & `TWITCH_CLIENT_SECRET`: Twitch OAuth credentials.
+- `KICK_CLIENT_ID` & `KICK_CLIENT_SECRET`: Kick OAuth credentials.
+- `CERT_FILE` & `KEY_FILE`: Paths to TLS certificate and key (e.g., `/app/certs/server.crt`).
+
+## HTTPS Setup (Local Development)
+
+To run the server with HTTPS locally, you need self-signed certificates.
+
+1.  **Create a `certs` directory** in `backend/`:
+    ```bash
+    mkdir certs
+    ```
+2.  **Generate Certificates**:
+    ```bash
+    openssl req -x509 -newkey rsa:4096 -keyout certs/server.key -out certs/server.crt -days 365 -nodes -subj "/C=CN/ST=State/L=Locality/O=Organization/OU=Unit/CN=localhost"
+    ```
 
 ## Build and Run
 

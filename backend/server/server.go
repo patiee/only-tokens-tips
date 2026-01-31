@@ -22,6 +22,8 @@ type Config struct {
 	KickClientID       string
 	KickClientSecret   string
 	JWTSecret          string
+	CertFile           string
+	KeyFile            string
 }
 
 type Server struct {
@@ -74,7 +76,14 @@ func (s *Server) Start(port string) {
 	r.POST("/api/tip", s.HandleTip)
 
 	s.logger.Printf("Server starting on :%s", port)
-	r.Run(":" + port)
+	if s.config.CertFile != "" && s.config.KeyFile != "" {
+		s.logger.Printf("Enabling HTTPS with cert: %s", s.config.CertFile)
+		if err := r.RunTLS(":"+port, s.config.CertFile, s.config.KeyFile); err != nil {
+			s.logger.Fatalf("Failed to start HTTPS server: %v", err)
+		}
+	} else {
+		r.Run(":" + port)
+	}
 }
 
 func (s *Server) HandleSignup(c *gin.Context) {

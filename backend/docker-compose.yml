@@ -9,6 +9,8 @@ services:
       - db
     env_file:
       - .env
+    volumes:
+      - ./certs:/app/certs
     environment:
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT}
@@ -17,6 +19,8 @@ services:
       - DB_NAME=${DB_NAME}
       - JWT_SECRET=${JWT_SECRET}
       - PORT=${PORT}
+      - CERT_FILE=/app/certs/server.crt
+      - KEY_FILE=/app/certs/server.key
     restart: always
 
   db:
