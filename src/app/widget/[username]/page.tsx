@@ -2,96 +2,89 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
+import { Wallet } from "lucide-react";
 
 type Tip = {
-    type: string;
     sender: string;
-    message: string;
     amount: string;
+    message: string;
+    asset: string;
 };
 
 export default function WidgetPage() {
     const params = useParams();
     const username = params.username as string;
-    const [tips, setTips] = useState<Tip[]>([]);
-    const [currentTip, setCurrentTip] = useState<Tip | null>(null);
+    const [alert, setAlert] = useState<Tip | null>(null);
 
+    // Poll for new tips
     useEffect(() => {
-        if (!username) return;
+        const interval = setInterval(() => {
+            // Mock fetching "pending" tips from backend queue
+            // In real impl, we'd act on unread tips
+            // For now, let's just keep it empty until we wire up specific "widget" poll endpoint
+            // or use a websocket.
 
-        // Connect to WebSocket
-        const ws = new WebSocket(`ws://localhost:8080/ws/${username}`);
+            // fetch(`/api/widget/${username}/poll`)....
+        }, 5000);
 
-        ws.onopen = () => {
-            console.log("Connected to OBS Widget WebSocket");
-        };
-
-        ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.Type === "TIP") {
-                    setTips((prev) => [...prev, {
-                        type: "TIP",
-                        sender: data.sender,
-                        message: data.message,
-                        amount: data.amount
-                    }]);
-                }
-            } catch (e) {
-                console.error("WS Parse Error", e);
-            }
-        };
-
-        ws.onclose = () => {
-            console.log("Disconnected from WS");
-            // Reconnect logic could go here
-        };
-
-        return () => {
-            ws.close();
-        };
+        return () => clearInterval(interval);
     }, [username]);
 
-    // Queue system for displaying tips one by one
+    // Test effect to show animation for dev
     useEffect(() => {
-        if (!currentTip && tips.length > 0) {
-            setCurrentTip(tips[0]);
-            setTips((prev) => prev.slice(1));
-
-            // Show for 5 seconds then clear
-            setTimeout(() => {
-                setCurrentTip(null);
-            }, 5000);
-        }
-    }, [tips, currentTip]);
-
-    if (!currentTip) return <div className="text-transparent">Waiting for tips...</div>;
+        // Trigger a test alert on load
+        // setAlert({ sender: "Anonymous", amount: "0.05", message: "Great stream! Keep it up!", asset: "ETH" });
+        // setTimeout(() => setAlert(null), 8000);
+    }, []);
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-transparent">
-            <div className="bg-black/80 text-white p-6 rounded-xl border-4 border-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.5)] animate-bounce-in max-w-lg w-full text-center">
-                <div className="text-3xl font-bold text-yellow-400 mb-2 drop-shadow-md">
-                    {currentTip.sender}
-                </div>
-                <div className="text-xl text-purple-200 mb-4 font-semibold">
-                    sent ${currentTip.amount}
-                </div>
-                <div className="text-2xl font-medium leading-relaxed break-words">
-                    "{currentTip.message}"
-                </div>
-            </div>
+        <div className="min-h-screen bg-transparent flex items-end justify-center p-8 overflow-hidden font-sans">
+            <AnimatePresence>
+                {alert && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -20, scale: 0.9 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                        className="relative w-full max-w-lg"
+                    >
+                        {/* Glow effect */}
+                        <div className="absolute inset-0 bg-blue-600/20 blur-3xl rounded-full animate-pulse" />
 
-            <style jsx global>{`
-        body { background: transparent; }
-        @keyframes bounce-in {
-          0% { transform: scale(0.5); opacity: 0; }
-          60% { transform: scale(1.1); opacity: 1; }
-          100% { transform: scale(1); }
-        }
-        .animate-bounce-in {
-          animation: bounce-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-        }
-      `}</style>
+                        <div className="relative bg-zinc-900/95 border-2 border-blue-500/50 rounded-3xl p-6 shadow-2xl backdrop-blur-xl overflow-hidden">
+                            {/* Accent line */}
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 via-blue-500 to-green-400" />
+
+                            <div className="flex items-start gap-4">
+                                <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 p-1 shadow-lg shrink-0">
+                                    <div className="w-full h-full rounded-full bg-black flex items-center justify-center">
+                                        <Wallet className="text-white w-8 h-8" />
+                                    </div>
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-baseline gap-2 flex-wrap">
+                                        <span className="text-2xl font-bold text-white drop-shadow-md">
+                                            {alert.sender}
+                                        </span>
+                                        <span className="text-lg text-zinc-400">sent</span>
+                                        <span className="text-3xl font-extrabold text-green-400 drop-shadow-md">
+                                            {alert.amount} {alert.asset}
+                                        </span>
+                                    </div>
+
+                                    {alert.message && (
+                                        <div className="mt-2 text-xl font-medium text-blue-100 italic break-words leading-snug">
+                                            "{alert.message}"
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

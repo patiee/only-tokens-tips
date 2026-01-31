@@ -9,9 +9,9 @@ import { useState } from "react";
 
 const config = getDefaultConfig({
     appName: "Only Tokens Tips",
-    projectId: "YOUR_PROJECT_ID", // TODO: Get a WalletConnect Project ID or leave placeholder for demo
+    projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "YOUR_PROJECT_ID",
     chains: [sepolia],
-    ssr: true, // If your dApp uses server side rendering (SSR)
+    ssr: true,
 });
 
 export function Providers({ children }: { children: React.ReactNode }) {
