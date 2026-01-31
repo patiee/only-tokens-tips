@@ -51,6 +51,7 @@ func main() {
 		JWTSecret:          os.Getenv("JWT_SECRET"),
 		CertFile:           os.Getenv("CERT_FILE"),
 		KeyFile:            os.Getenv("KEY_FILE"),
+		CORSEnabled:        os.Getenv("CORS_ENABLED") == "true",
 	}
 
 	// Init and Start Server

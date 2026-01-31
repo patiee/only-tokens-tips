@@ -24,6 +24,7 @@ type Config struct {
 	JWTSecret          string
 	CertFile           string
 	KeyFile            string
+	CORSEnabled        bool
 }
 
 type Server struct {
@@ -57,8 +58,15 @@ func (s *Server) Start(port string) {
 
 	// CORS configuration
 	config := cors.DefaultConfig()
-	config.AllowAllOrigins = true
-	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type"}
+	if s.config.CORSEnabled {
+		s.logger.Println("CORS: Enabling Access-Control-Allow-Origin: *")
+		config.AllowAllOrigins = true
+	} else {
+		// Fallback for dev or specific handling
+		config.AllowOrigins = []string{"http://localhost:3000", "https://localhost:3000"}
+	}
+
+	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
 	r.Use(cors.New(config))
 
 	// WebSocket endpoint for OBS widget
@@ -135,15 +143,41 @@ func (s *Server) HandleLogin(c *gin.Context) {
 }
 
 func (s *Server) HandleMe(c *gin.Context) {
-	token := c.Query("token")
-	// Mock token parsing: "mock_token_USERNAME"
-	if len(token) < 12 || token[:11] != "mock_token_" {
+	tokenString := c.Query("token")
+	if tokenString == "" {
+		// Also check Authorization header
+		authHeader := c.GetHeader("Authorization")
+		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+			tokenString = authHeader[7:]
+		}
+	}
+
+	if tokenString == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing token"})
+		return
+	}
+
+	// Support legacy mock token for fresh signups if needed (optional, but better to unify)
+	if len(tokenString) > 11 && tokenString[:11] == "mock_token_" {
+		username := tokenString[11:]
+		user, err := s.db.GetUserByUsername(username)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+		c.JSON(http.StatusOK, user)
+		return
+	}
+
+	// Validate JWT
+	claims, err := s.ValidateSessionToken(tokenString)
+	if err != nil {
+		s.logger.Printf("Invalid session token: %v", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 		return
 	}
-	username := token[11:]
 
-	user, err := s.db.GetUserByUsername(username)
+	user, err := s.db.GetUserByUsername(claims.Username)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return

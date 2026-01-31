@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/patiee/backend/server/model"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"golang.org/x/oauth2/twitch"
@@ -24,7 +25,7 @@ func (s *Server) InitOAuth() {
 	googleConfig = &oauth2.Config{
 		ClientID:     s.config.GoogleClientID,
 		ClientSecret: s.config.GoogleClientSecret,
-		RedirectURL:  "http://localhost:8080/auth/google/callback",
+		RedirectURL:  "https://localhost:8080/auth/google/callback",
 		Scopes: []string{
 			"https://www.googleapis.com/auth/userinfo.email",
 			"https://www.googleapis.com/auth/userinfo.profile",
@@ -36,7 +37,7 @@ func (s *Server) InitOAuth() {
 	twitchConfig = &oauth2.Config{
 		ClientID:     s.config.TwitchClientID,
 		ClientSecret: s.config.TwitchClientSecret,
-		RedirectURL:  "http://localhost:8080/auth/twitch/callback",
+		RedirectURL:  "https://localhost:8080/auth/twitch/callback",
 		Scopes:       []string{"user:read:email"},
 		Endpoint:     twitch.Endpoint,
 	}
@@ -45,7 +46,7 @@ func (s *Server) InitOAuth() {
 	kickConfig = &oauth2.Config{
 		ClientID:     s.config.KickClientID,
 		ClientSecret: s.config.KickClientSecret,
-		RedirectURL:  "http://localhost:8080/auth/kick/callback",
+		RedirectURL:  "https://localhost:8080/auth/kick/callback",
 		Scopes:       []string{"user:read"}, // Verify scope in Kick docs
 		Endpoint: oauth2.Endpoint{
 			AuthURL:  "https://id.kick.com/oauth/authorize", // Verify this
@@ -137,15 +138,8 @@ func (s *Server) HandleOAuthCallback(c *gin.Context) {
 	}
 }
 
-type UserProfile struct {
-	ID     string
-	Email  string
-	Name   string
-	Avatar string
-}
-
-func (s *Server) fetchUserProfile(provider, accessToken string, logger interface{}) (*UserProfile, error) {
-	var user UserProfile
+func (s *Server) fetchUserProfile(provider, accessToken string, logger interface{}) (*model.UserProfile, error) {
+	var user model.UserProfile
 	client := &http.Client{}
 
 	switch provider {
@@ -155,12 +149,7 @@ func (s *Server) fetchUserProfile(provider, accessToken string, logger interface
 			return nil, err
 		}
 		defer resp.Body.Close()
-		var googleUser struct {
-			Id      string `json:"id"`
-			Email   string `json:"email"`
-			Name    string `json:"name"`
-			Picture string `json:"picture"`
-		}
+		var googleUser model.GoogleUser
 		if err := json.NewDecoder(resp.Body).Decode(&googleUser); err != nil {
 			return nil, err
 		}
@@ -178,14 +167,7 @@ func (s *Server) fetchUserProfile(provider, accessToken string, logger interface
 			return nil, err
 		}
 		defer resp.Body.Close()
-		var twitchResp struct {
-			Data []struct {
-				ID              string `json:"id"`
-				Email           string `json:"email"`
-				DisplayName     string `json:"display_name"`
-				ProfileImageUrl string `json:"profile_image_url"`
-			} `json:"data"`
-		}
+		var twitchResp model.TwitchResp
 		if err := json.NewDecoder(resp.Body).Decode(&twitchResp); err != nil {
 			return nil, err
 		}
@@ -206,12 +188,7 @@ func (s *Server) fetchUserProfile(provider, accessToken string, logger interface
 		}
 		defer resp.Body.Close()
 		// Assuming generic structure for now
-		var kickUser struct {
-			ID         json.Number `json:"id"`    // integer specific
-			Email      string      `json:"email"` // Might not be available
-			Username   string      `json:"username"`
-			ProfilePic string      `json:"profile_pic"`
-		}
+		var kickUser model.KickUser
 		if err := json.NewDecoder(resp.Body).Decode(&kickUser); err != nil {
 			return nil, err
 		}

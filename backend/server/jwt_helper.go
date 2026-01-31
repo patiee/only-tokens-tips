@@ -82,3 +82,23 @@ func (s *Server) ValidateSignupToken(tokenString string) (*SignupClaims, error) 
 
 	return nil, fmt.Errorf("invalid token")
 }
+
+// ValidateSessionToken parses and validates the session token
+func (s *Server) ValidateSessionToken(tokenString string) (*SessionClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &SessionClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return s.GetJWTSecret(), nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if claims, ok := token.Claims.(*SessionClaims); ok && token.Valid {
+		return claims, nil
+	}
+
+	return nil, fmt.Errorf("invalid token")
+}
