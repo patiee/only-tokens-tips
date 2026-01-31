@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Wallet, User as UserIcon } from "lucide-react";
 
-type UserProfile = {
+export type UserProfile = {
     username: string;
     eth_address: string;
     main_wallet: boolean;
