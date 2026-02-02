@@ -128,13 +128,39 @@ func (s *Server) HandleSignup(c *gin.Context) {
 	}
 
 	if err := s.db.CreateUser(&user); err != nil {
+		// Check if it failed because user already exists (ProviderID collision)
+		// Since we verified the signup token which contains trusted ProviderID,
+		// if the user exists with this ProviderID, we can safely log them in.
+		existingUser, fetchErr := s.db.GetUserByProviderID(claims.Provider, claims.ProviderID)
+		if fetchErr == nil {
+			// User exists! seamless login.
+			token, tokenErr := s.GenerateSessionToken(existingUser)
+			if tokenErr != nil {
+				s.logger.Printf("Failed to generate token for existing user: %v", tokenErr)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+				return
+			}
+			s.logger.Printf("User already exists, seamless login: %s", existingUser.Username)
+			c.JSON(http.StatusOK, gin.H{"message": "User logged in", "user": existingUser, "token": token})
+			return
+		}
+
 		s.logger.Printf("Failed to create user: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user or username taken"})
+		return
+	}
+
+	// New user created
+	token, err := s.GenerateSessionToken(&user) // Generate session token immediately for auto-login
+	if err != nil {
+		s.logger.Printf("User created but failed to generate token: %v", err)
+		// Client will have to login manually, but user is created.
+		c.JSON(http.StatusCreated, gin.H{"message": "User created", "user": user})
 		return
 	}
 
 	s.logger.Printf("User created: %s", user.Username)
-	c.JSON(http.StatusCreated, gin.H{"message": "User created", "user": user})
+	c.JSON(http.StatusCreated, gin.H{"message": "User created", "user": user, "token": token})
 }
 
 func (s *Server) HandleLogin(c *gin.Context) {
