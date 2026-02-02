@@ -15,6 +15,14 @@ type SignupRequest struct {
 	MainWallet  bool   `json:"main_wallet"`
 }
 
+type UpdateWidgetRequest struct {
+	WaitTTS      bool   `json:"tts_enabled"`
+	BgColor      string `json:"background_color"`
+	UserColor    string `json:"user_color"`
+	AmountColor  string `json:"amount_color"`
+	MessageColor string `json:"message_color"`
+}
+
 type UpdateWalletRequest struct {
 	EthAddress string `json:"eth_address" binding:"required"`
 }

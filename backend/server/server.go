@@ -81,6 +81,7 @@ func (s *Server) Start(port string) {
 	// API endpoints
 	r.GET("/api/me", s.HandleMe)
 	r.PUT("/api/me/wallet", s.HandleUpdateWallet)
+	r.PUT("/api/me/widget", s.HandleUpdateWidget)
 	r.GET("/api/user/:username", s.HandleGetUser)
 	r.POST("/api/tip", s.HandleTip)
 
@@ -223,8 +224,13 @@ func (s *Server) HandleGetUser(c *gin.Context) {
 
 	// Return only public info
 	c.JSON(http.StatusOK, gin.H{
-		"username":    user.Username,
-		"eth_address": user.EthAddress,
+		"username":             user.Username,
+		"eth_address":          user.EthAddress,
+		"widget_tts":           user.WidgetTTS,
+		"widget_bg_color":      user.WidgetBgColor,
+		"widget_user_color":    user.WidgetUserColor,
+		"widget_amount_color":  user.WidgetAmountColor,
+		"widget_message_color": user.WidgetMessageColor,
 	})
 }
 
@@ -264,6 +270,37 @@ func (s *Server) HandleUpdateWallet(c *gin.Context) {
 
 	s.logger.Printf("User %s updated wallet to %s", claims.Username, req.EthAddress)
 	c.JSON(http.StatusOK, gin.H{"message": "Wallet updated", "eth_address": req.EthAddress})
+}
+
+func (s *Server) HandleUpdateWidget(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid token"})
+		return
+	}
+	tokenString := authHeader[7:]
+
+	claims, err := s.ValidateSessionToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	var req model.UpdateWidgetRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
+
+	err = s.db.UpdateWidgetConfig(claims.UserID, req.WaitTTS, req.BgColor, req.UserColor, req.AmountColor, req.MessageColor)
+	if err != nil {
+		s.logger.Printf("Failed to update widget config for user %d: %v", claims.UserID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update widget settings"})
+		return
+	}
+
+	s.logger.Printf("User %s updated widget config", claims.Username)
+	c.JSON(http.StatusOK, gin.H{"message": "Widget settings updated"})
 }
 
 func (s *Server) HandleTip(c *gin.Context) {

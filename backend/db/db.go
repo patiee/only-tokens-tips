@@ -59,3 +59,13 @@ func (d *Database) CreateUser(user *model.User) error {
 func (d *Database) UpdateUserWallet(userID uint, ethAddress string) error {
 	return d.conn.Model(&model.User{}).Where("id = ?", userID).Update("eth_address", ethAddress).Error
 }
+
+func (d *Database) UpdateWidgetConfig(userID uint, tts bool, bg, userColor, amountColor, msgColor string) error {
+	return d.conn.Model(&model.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+		"widget_tts":           tts,
+		"widget_bg_color":      bg,
+		"widget_user_color":    userColor,
+		"widget_amount_color":  amountColor,
+		"widget_message_color": msgColor,
+	}).Error
+}

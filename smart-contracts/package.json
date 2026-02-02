@@ -1,0 +1,17 @@
+{
+    "name": "only-tokens-tips-contracts",
+    "version": "1.0.0",
+    "description": "Smart contracts for OnlyTokens Tips",
+    "scripts": {
+        "test": "hardhat test",
+        "compile": "hardhat compile",
+        "deploy:base": "hardhat run scripts/deploy.ts --network base"
+    },
+    "devDependencies": {
+        "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+        "hardhat": "^2.22.0",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.3.3",
+        "dotenv": "^16.4.1"
+    }
+}
