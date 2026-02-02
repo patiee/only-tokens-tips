@@ -80,6 +80,7 @@ func (s *Server) Start(port string) {
 
 	// API endpoints
 	r.GET("/api/me", s.HandleMe)
+	r.PUT("/api/me/wallet", s.HandleUpdateWallet)
 	r.GET("/api/user/:username", s.HandleGetUser)
 	r.POST("/api/tip", s.HandleTip)
 
@@ -225,6 +226,44 @@ func (s *Server) HandleGetUser(c *gin.Context) {
 		"username":    user.Username,
 		"eth_address": user.EthAddress,
 	})
+}
+
+func (s *Server) HandleUpdateWallet(c *gin.Context) {
+	// 1. Get user from token/context (middleware?)
+	// Not using middleware yet, but HandleMe does token validation.
+	// We should extract token validation if we add more protected routes,
+	// but for now I'll duplicate the quick check or grab from header.
+
+	authHeader := c.GetHeader("Authorization")
+	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid token"})
+		return
+	}
+	tokenString := authHeader[7:]
+
+	claims, err := s.ValidateSessionToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	// 2. Parse request
+	var req model.UpdateWalletRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
+
+	// 3. Update DB
+	err = s.db.UpdateUserWallet(claims.UserID, req.EthAddress)
+	if err != nil {
+		s.logger.Printf("Failed to update wallet for user %d: %v", claims.UserID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update wallet"})
+		return
+	}
+
+	s.logger.Printf("User %s updated wallet to %s", claims.Username, req.EthAddress)
+	c.JSON(http.StatusOK, gin.H{"message": "Wallet updated", "eth_address": req.EthAddress})
 }
 
 func (s *Server) HandleTip(c *gin.Context) {

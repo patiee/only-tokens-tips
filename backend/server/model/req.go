@@ -14,3 +14,7 @@ type SignupRequest struct {
 	EthAddress  string `json:"eth_address"`
 	MainWallet  bool   `json:"main_wallet"`
 }
+
+type UpdateWalletRequest struct {
+	EthAddress string `json:"eth_address" binding:"required"`
+}

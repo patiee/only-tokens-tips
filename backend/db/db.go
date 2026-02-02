@@ -55,3 +55,7 @@ func (d *Database) GetUserByProviderID(provider, providerID string) (user *model
 func (d *Database) CreateUser(user *model.User) error {
 	return d.conn.Create(user).Error
 }
+
+func (d *Database) UpdateUserWallet(userID uint, ethAddress string) error {
+	return d.conn.Model(&model.User{}).Where("id = ?", userID).Update("eth_address", ethAddress).Error
+}
