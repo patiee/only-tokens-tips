@@ -13,6 +13,7 @@ export interface TipData {
     sender: string;
     amount: string;
     message: string;
+    actionText?: string;
 }
 
 interface TipWidgetProps {
@@ -49,7 +50,7 @@ export const TipWidget = ({ tip, config, isPreview = false }: TipWidgetProps) =>
                 </div>
                 <div>
                     <div className="font-bold text-lg leading-tight mb-1" style={{ color: config.user_color }}>
-                        {tip.sender} <span className="opacity-80 font-normal" style={{ color: config.message_color }}>tipped</span> <span style={{ color: config.amount_color }} className="drop-shadow-sm">{tip.amount}</span>
+                        {tip.sender} <span className="opacity-80 font-normal" style={{ color: config.message_color }}>{tip.actionText || 'tipped'}</span> <span style={{ color: config.amount_color }} className="drop-shadow-sm">{tip.amount}</span>
                     </div>
                     {tip.message && (
                         <p className="text-base opacity-90 leading-snug break-words" style={{ color: config.message_color }}>
