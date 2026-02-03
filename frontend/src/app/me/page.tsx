@@ -10,17 +10,19 @@ export type UserProfile = {
     eth_address: string;
     main_wallet: boolean;
     name?: string;
-    avatar?: string;
+    avatar_url?: string;
 };
 
 function DashboardContent() {
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [copied, setCopied] = useState(false);
     const [error, setError] = useState("");
+    const [tips, setTips] = useState<any[]>([]);
     const router = useRouter();
     const searchParams = useSearchParams();
 
     useEffect(() => {
+        console.log("Dashboard mounted");
         let token = searchParams.get("token");
 
         if (token) {
@@ -51,6 +53,28 @@ function DashboardContent() {
                 setError(err.message || "Connection failed");
                 // Do NOT redirect, let user see the error
             });
+
+        // Fetch Recent Tips
+        // Use default limit=10, no cursor for initial load
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/me/tips?limit=10`, {
+            headers: {
+                "Authorization": `Bearer ${token}`
+            }
+        })
+            .then(res => {
+                if (res.status === 401) throw new Error("Unauthorized");
+                return res.json();
+            })
+            .then(data => {
+                // Handle new response format { tips: [], next_cursor: "..." }
+                if (data.tips && Array.isArray(data.tips)) {
+                    setTips(data.tips);
+                } else if (Array.isArray(data)) {
+                    // Fallback for old API if needed (though we changed it)
+                    setTips(data);
+                }
+            })
+            .catch(console.error);
     }, [router, searchParams]);
 
     const copyToClipboard = () => {
@@ -109,8 +133,8 @@ function DashboardContent() {
                     <div className="relative">
                         <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 blur opacity-75"></div>
                         <div className="relative w-24 h-24 bg-zinc-900 rounded-full flex items-center justify-center text-4xl font-bold overflow-hidden border-4 border-black">
-                            {profile.avatar ? (
-                                <img src={profile.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                            {profile.avatar_url ? (
+                                <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
                             ) : (
                                 profile.username[0]?.toUpperCase()
                             )}
@@ -202,14 +226,59 @@ function DashboardContent() {
                         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 h-full min-h-[400px]">
                             <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
                                 <DollarSign className="text-green-400" /> Recent Tips
+                                {tips.length > 0 && <span className="text-xs font-normal text-zinc-500 bg-zinc-800 px-2 py-1 rounded-full">{tips.length}</span>}
                             </h3>
 
-                            <div className="flex flex-col items-center justify-center h-64 text-zinc-500 gap-4 border-2 border-dashed border-zinc-800 rounded-xl bg-zinc-900/50">
-                                <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center">
-                                    <DollarSign size={24} className="text-zinc-600" />
+                            {tips.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center h-64 text-zinc-500 gap-4 border-2 border-dashed border-zinc-800 rounded-xl bg-zinc-900/50">
+                                    <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center">
+                                        <DollarSign size={24} className="text-zinc-600" />
+                                    </div>
+                                    <p>No tips yet. Share your link to get started!</p>
                                 </div>
-                                <p>No tips yet. Share your link to get started!</p>
-                            </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="border-b border-zinc-800 text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                                                <th className="py-3 px-4">Date</th>
+                                                <th className="py-3 px-4">Sender</th>
+                                                <th className="py-3 px-4">Amount</th>
+                                                <th className="py-3 px-4">Message</th>
+                                                <th className="py-3 px-4">Tx Hash</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="text-sm divide-y divide-zinc-800/50">
+                                            {tips.map((tip, i) => (
+                                                <tr key={i} className="hover:bg-zinc-800/30 transition-colors">
+                                                    <td className="py-3 px-4 text-zinc-400">
+                                                        {new Date(tip.created_at).toLocaleDateString()} {new Date(tip.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </td>
+                                                    <td className="py-3 px-4 font-medium text-white">{tip.sender}</td>
+                                                    <td className="py-3 px-4 text-green-400 font-mono">
+                                                        {tip.amount} {tip.asset || "ETH"}
+                                                    </td>
+                                                    <td className="py-3 px-4 text-zinc-300 max-w-xs truncate" title={tip.message}>
+                                                        {tip.message}
+                                                    </td>
+                                                    <td className="py-3 px-4">
+                                                        {tip.tx_hash ? (
+                                                            <a
+                                                                href={`https://basescan.org/tx/${tip.tx_hash}`}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                className="text-purple-400 hover:text-purple-300 text-xs bg-purple-500/10 px-2 py-1 rounded border border-purple-500/20"
+                                                            >
+                                                                View
+                                                            </a>
+                                                        ) : <span className="text-zinc-600">-</span>}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

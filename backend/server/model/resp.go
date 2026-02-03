@@ -2,17 +2,27 @@ package model
 
 import "encoding/json"
 
+type TipsResponse struct {
+	Tips       []TipResponseItem `json:"tips"`
+	NextCursor string            `json:"next_cursor"`
+}
+
+type TipResponseItem struct {
+	CreatedAt   string `json:"created_at"`
+	Sender      string `json:"sender"`
+	Message     string `json:"message"`
+	Amount      string `json:"amount"`
+	Asset       string `json:"asset"`
+	TxHash      string `json:"tx_hash"`
+	SourceChain string `json:"source_chain"`
+}
+
 type TipNotification struct {
 	Type       string `json:"type"`
 	StreamerID string `json:"streamerId"`
 	Sender     string `json:"sender"`
 	Message    string `json:"message"`
 	Amount     string `json:"amount"`
-}
-
-type GenericResponse struct {
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
 }
 
 type UserProfile struct {
@@ -39,8 +49,8 @@ type TwitchResp struct {
 }
 
 type KickUser struct {
-	ID         json.Number `json:"id"`    // integer specific
-	Email      string      `json:"email"` // Might not be available
+	ID         json.Number `json:"id"`
+	Email      string      `json:"email"`
 	Username   string      `json:"username"`
 	ProfilePic string      `json:"profile_pic"`
 }

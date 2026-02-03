@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -84,6 +85,7 @@ func (s *Server) Start(port string) {
 	r.PUT("/api/me/widget", s.HandleUpdateWidget)
 	r.GET("/api/user/:username", s.HandleGetUser)
 	r.POST("/api/tip", s.HandleTip)
+	r.GET("/api/me/tips", s.HandleGetTips)
 
 	s.logger.Printf("Server starting on :%s", port)
 	if s.config.CertFile != "" && s.config.KeyFile != "" {
@@ -319,7 +321,98 @@ func (s *Server) HandleTip(c *gin.Context) {
 	// Notify connected widgets
 	s.notifyWidgets(tip)
 
+	// Save to DB
+	dbTip := &dbmodel.Tip{
+		StreamerID:    tip.StreamerID,
+		Sender:        tip.Sender,
+		Message:       tip.Message,
+		Amount:        tip.Amount,
+		Asset:         tip.Asset,
+		TxHash:        tip.TxHash,
+		ChainID:       tip.ChainID,
+		SourceChain:   tip.SourceChain,
+		DestChain:     tip.DestChain,
+		SourceAddress: tip.SourceAddress,
+		DestAddress:   tip.DestAddress,
+	}
+
+	if err := s.db.CreateTip(dbTip); err != nil {
+		s.logger.Printf("Failed to save tip to DB: %v", err)
+		// Don't fail the request, just log it. The widget was notified.
+	}
+
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Tip processed"})
+}
+
+func (s *Server) HandleGetTips(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid token"})
+		return
+	}
+	tokenString := authHeader[7:]
+
+	claims, err := s.ValidateSessionToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	// Parse Limit
+	limit := 10 // Default
+	if l := c.Query("limit"); l != "" {
+		fmt.Sscanf(l, "%d", &limit)
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	// Parse Cursor
+	var cursor uint64
+	if cur := c.Query("cursor"); cur != "" {
+		fmt.Sscanf(cur, "%d", &cursor)
+	}
+
+	// Fetch tips
+	tips, err := s.db.GetTipsPaginated(claims.Username, limit, uint(cursor))
+	if err != nil {
+		s.logger.Printf("Failed to fetch tips for %s: %v", claims.Username, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tips"})
+		return
+	}
+
+	// Build Response
+	var nextCursor string
+	if len(tips) > 0 {
+		// Since we ordered DESC, the last item has the smallest ID.
+		// Next cursor should be that ID.
+		lastTip := tips[len(tips)-1]
+		nextCursor = fmt.Sprintf("%d", lastTip.ID)
+
+		// Optimization: If we fetched less than limit, we are at the end.
+		if len(tips) < limit {
+			nextCursor = ""
+		}
+	}
+
+	// Convert to Response Items
+	responseItems := make([]model.TipResponseItem, 0, len(tips))
+	for _, t := range tips {
+		responseItems = append(responseItems, model.TipResponseItem{
+			CreatedAt:   t.CreatedAt.Format(time.RFC3339),
+			Sender:      t.Sender,
+			Message:     t.Message,
+			Amount:      t.Amount,
+			Asset:       t.Asset,
+			TxHash:      t.TxHash,
+			SourceChain: t.SourceChain,
+		})
+	}
+
+	c.JSON(http.StatusOK, model.TipsResponse{
+		Tips:       responseItems,
+		NextCursor: nextCursor,
+	})
 }
 
 func (s *Server) HandleWS(c *gin.Context) {

@@ -29,7 +29,17 @@ const PRESET_AMOUNTS = ["0.001", "0.01", "0.05", "0.1"];
 
 interface LifiTipProps {
     recipientAddress: string;
-    onSuccess: (txHash: string, amount: string, message: string, senderName: string) => void;
+    onSuccess: (data: {
+        txHash: string;
+        amount: string;
+        message: string;
+        senderName: string;
+        asset: string;
+        sourceChain: string;
+        destChain: string;
+        sourceAddress: string;
+        destAddress: string;
+    }) => void;
     onStatus: (status: string) => void;
 }
 
@@ -310,7 +320,18 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus }: LifiTipProps)
             });
 
             onStatus("Transaction Sent! Waiting for confirmation...");
-            onSuccess(txHash, amount, message, senderName);
+            onStatus("Transaction Sent! Waiting for confirmation...");
+            onSuccess({
+                txHash,
+                amount,
+                message,
+                senderName,
+                asset: selectedAsset.symbol,
+                sourceChain: selectedChainId.toString(),
+                destChain: base.id.toString(), // Hardcoded per plan
+                sourceAddress: address as string,
+                destAddress: recipientAddress
+            });
 
         } catch (e: any) {
             console.error(e);

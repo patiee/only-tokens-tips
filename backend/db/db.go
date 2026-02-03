@@ -33,7 +33,7 @@ func (d *Database) Init(dsn string) (err error) {
 	d.logger.Println("Database connected successfully")
 
 	// Migrate the schema
-	return d.conn.AutoMigrate(&model.User{})
+	return d.conn.AutoMigrate(&model.User{}, &model.Tip{})
 }
 
 func (d *Database) GetUserByUsername(username string) (user *model.User, err error) {
@@ -68,4 +68,20 @@ func (d *Database) UpdateWidgetConfig(userID uint, tts bool, bg, userColor, amou
 		"widget_amount_color":  amountColor,
 		"widget_message_color": msgColor,
 	}).Error
+}
+
+func (d *Database) CreateTip(tip *model.Tip) error {
+	return d.conn.Create(tip).Error
+}
+
+func (d *Database) GetTipsPaginated(streamerID string, limit int, cursor uint) ([]model.Tip, error) {
+	var tips []model.Tip
+	query := d.conn.Where("streamer_id = ?", streamerID).Order("id desc").Limit(limit)
+
+	if cursor > 0 {
+		query = query.Where("id < ?", cursor)
+	}
+
+	err := query.Find(&tips).Error
+	return tips, err
 }

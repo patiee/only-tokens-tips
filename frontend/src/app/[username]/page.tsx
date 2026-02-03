@@ -33,23 +33,40 @@ export default function TipPage() {
             .catch(console.error);
     }, [username]);
 
-    const notifyBackend = useCallback((txHash: string | undefined, amt: string, msg: string, sender: string) => {
-        if (!txHash) return;
+    const notifyBackend = useCallback((data: {
+        txHash: string;
+        amount: string;
+        message: string;
+        sender: string;
+        asset: string;
+        sourceChain: string;
+        destChain: string;
+        sourceAddress: string;
+        destAddress: string;
+    }) => {
+        if (!data.txHash) return;
         fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/tip`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 streamerId: username,
-                sender: sender || "Anonymous",
-                message: msg,
-                amount: amt,
-                txHash: txHash,
+                sender: data.sender || "Anonymous",
+                message: data.message,
+                amount: data.amount,
+                txHash: data.txHash,
+                asset: data.asset,
+                chainId: data.sourceChain, // Use source chain as main ChainID for record
+                sourceChain: data.sourceChain,
+                destChain: data.destChain,
+                sourceAddress: data.sourceAddress,
+                destAddress: data.destAddress,
             }),
         }).catch(console.error);
     }, [username]);
 
-    const handleSuccess = useCallback((txHash: string, amt: string, msg: string, name: string) => {
-        notifyBackend(txHash, amt, msg, name);
+    const handleSuccess = useCallback((data: any) => {
+        // Map LifiTip data to backend params (rename senderName -> sender)
+        notifyBackend({ ...data, sender: data.senderName });
         setStatus("Success! Tip sent.");
     }, [notifyBackend]);
 
