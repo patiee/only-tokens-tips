@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 import { TipWidget } from "@/components/TipWidget";
@@ -18,8 +18,18 @@ type Tip = {
 export default function WidgetPage() {
     const params = useParams();
     const username = params.username as string;
-    const [alert, setAlert] = useState<Tip | null>(null);
+
+    // State
+    const [queue, setQueue] = useState<Tip[]>([]);
+    const [currentTip, setCurrentTip] = useState<Tip | null>(null);
     const [connected, setConnected] = useState(false);
+    const [interactionNeeded, setInteractionNeeded] = useState(true);
+
+    // Queue Ref to avoid stale closures in timeouts
+    const queueRef = useRef(queue);
+    useEffect(() => { queueRef.current = queue; }, [queue]);
+
+    // Config State
     const [config, setConfig] = useState({
         tts_enabled: false,
         background_color: "#000000",
@@ -46,7 +56,7 @@ export default function WidgetPage() {
             .catch(console.error);
     }, [username]);
 
-    // WebSocket Connection
+    // WebSocket Connection - Ingests into Queue
     useEffect(() => {
         const wsUrl = (process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080').replace("http", "ws") + `/ws/${username}`;
         let socket: WebSocket;
@@ -67,11 +77,11 @@ export default function WidgetPage() {
                             sender: data.sender || "Anonymous",
                             amount: data.amount || "0",
                             message: data.message || "",
-                            asset: "ETH", // simplified for MVP
+                            asset: data.asset || "ETH", // Dynamic asset from server
                             language: 'en' // default
                         };
 
-                        // 1. Detect Language EARLY (for both Visual Widget & TTS)
+                        // Detect Language IMMEDIATELY upon receipt
                         if (newTip.message) {
                             // Added: cmn (Mandarin), zho (Chinese), arb (Arabic), hin (Hindi)
                             const commonLangs = ['pol', 'eng', 'deu', 'fra', 'spa', 'ita', 'rus', 'kor', 'jpn', 'ukr', 'tur', 'por', 'cmn', 'zho', 'arb', 'hin'];
@@ -101,7 +111,6 @@ export default function WidgetPage() {
 
                             newTip.language = langMap[detectedLang3] || 'en';
 
-                            // Localize "tipped"
                             const tippedMap: Record<string, string> = {
                                 'pl': 'wysłał napiwek',
                                 'de': 'hat gespendet',
@@ -123,115 +132,13 @@ export default function WidgetPage() {
                             newTip.actionText = tippedMap[newTip.language] || 'tipped';
                         }
 
-                        // Show Alert
-                        setAlert(newTip);
-
-                        // TTS
-                        // TTS & duration logic
-                        const minimumDuration = 10000; // 10s minimum
-                        let tipFinishedSpeaking = false;
-                        let tipMinDurationPassed = false;
-
-                        const attemptClose = () => {
-                            if (tipFinishedSpeaking && tipMinDurationPassed) {
-                                setAlert(null);
-                            }
-                        };
-
-                        // 1. Start Minimum Duration Timer
-                        setTimeout(() => {
-                            tipMinDurationPassed = true;
-                            attemptClose();
-                        }, minimumDuration);
-
-                        // 2. Handle TTS or No-TTS path
-                        if (config.tts_enabled && newTip.message) {
-
-                            const targetLang = newTip.language || 'en';
-
-                            // Localize "says"
-                            const saysMap: Record<string, string> = {
-                                'pl': 'mówi',
-                                'de': 'sagt',
-                                'fr': 'dit',
-                                'es': 'dice',
-                                'it': 'dice',
-                                'ru': 'говорит',
-                                'zh': '说',
-                                'zh-HK': '說',
-                                'ja': 'が言いました',
-                                'ko': '가 말했습니다',
-                                'pt': 'diz',
-                                'tr': 'diyor ki',
-                                'uk': 'каже',
-                                'ar': 'يقول',
-                                'hi': 'कहते हैं',
-                                'en': 'says'
-                            };
-
-                            const saysWord = saysMap[targetLang] || 'says';
-
-                            // Construct message
-                            let textToSpeak = `${newTip.sender} ${saysWord}: ${newTip.message}`;
-
-                            const speech = new SpeechSynthesisUtterance(textToSpeak);
-                            speech.lang = targetLang;
-
-                            // 2b. Select Voice
-                            const voices = window.speechSynthesis.getVoices();
-                            let selectedVoice = voices.find(v => v.lang.startsWith(targetLang));
-
-                            if (selectedVoice) {
-                                speech.voice = selectedVoice;
-                                console.log(`TTS: Detected ${targetLang}, using voice: ${selectedVoice.name}. Phrase: "${textToSpeak}"`);
-                            } else {
-                                console.log(`TTS: Detected ${targetLang}, but no voice found. Using default.`);
-                            }
-
-                            speech.onend = () => {
-                                tipFinishedSpeaking = true;
-                                attemptClose();
-                            };
-
-                            speech.onerror = (event) => {
-                                console.error("TTS Error details:", event);
-                                if (event.error === 'not-allowed') {
-                                    console.log("Autoplay blocked. Showing overlay.");
-                                    setInteractionNeeded(true);
-                                }
-                                // Don't close immediately on not-allowed, usually implies audio context blocked.
-                                // But effectively speech is "done" (failed).
-                                tipFinishedSpeaking = true;
-                                attemptClose();
-                            };
-
-                            // Safety fallback: if speech takes excessively long (e.g. browser bug), force close after 60s
-                            setTimeout(() => setAlert(null), 60000);
-
-                            window.speechSynthesis.cancel(); // Cancel any previous speech
-
-                            // Small delay to allow cancel to process
-                            setTimeout(() => {
-                                window.speechSynthesis.speak(speech);
-                            }, 100);
-                        } else {
-                            // No TTS, so "speaking" is done immediately
-                            tipFinishedSpeaking = true;
-                            // Attempt close (will likely just wait for min timer)
-                            attemptClose();
-                        }
+                        console.log("Added tip to queue:", newTip);
+                        setQueue(prev => [...prev, newTip]);
                     }
                 } catch (e) {
                     console.error("WS Parse Error", e);
                 }
             };
-
-            // Ensure voices are loaded (Chrome edge case)
-            if (window.speechSynthesis.getVoices().length === 0) {
-                window.speechSynthesis.onvoiceschanged = () => {
-                    // trigger re-render or just let the next event pick it up
-                };
-            }
 
             socket.onclose = () => {
                 console.log("WS Disconnected, retrying...");
@@ -242,9 +149,138 @@ export default function WidgetPage() {
 
         connect();
         return () => socket?.close();
-    }, [username, config.tts_enabled]);
+    }, [username]);
 
-    const [interactionNeeded, setInteractionNeeded] = useState(true);
+    // Queue Processor
+    useEffect(() => {
+        // Only run if we are IDLE and there is something in the queue
+        const hasItems = queue.length > 0;
+
+        if (!currentTip && hasItems) {
+            console.log("Queue idle, preparing next tip in 2s...");
+
+            // Wait 2000ms for exit animation + buffer
+            const timer = setTimeout(() => {
+                setQueue(prev => {
+                    // Pop from the head using ref to ensuring latest state
+                    const currentQueue = queueRef.current;
+                    if (currentQueue.length === 0) return prev; // Safety
+
+                    const nextTip = currentQueue[0];
+                    setCurrentTip(nextTip);
+
+                    return prev.slice(1);
+                });
+            }, 2000);
+
+            return () => clearTimeout(timer);
+        }
+    }, [currentTip, queue.length > 0]); // Depend on boolean emptiness to restart delay only if we run out and fetch more
+
+    // Current Tip Processor (Display & TTS)
+    useEffect(() => {
+        if (!currentTip) return;
+
+        console.log("Processing tip:", currentTip);
+        let tipFinishedSpeaking = false;
+        let tipMinDurationPassed = false;
+        let isCleanedUp = false;
+
+        const attemptFinish = () => {
+            if (isCleanedUp) return;
+            // Only clear if BOTH conditions are met
+            if (tipFinishedSpeaking && tipMinDurationPassed) {
+                console.log("Tip finished, clearing...");
+                // Small buffer to ensure visual smoothness
+                setTimeout(() => {
+                    if (!isCleanedUp) setCurrentTip(null);
+                }, 500);
+            }
+        };
+
+        // 1. Minimum Duration Timer (10s)
+        setTimeout(() => {
+            tipMinDurationPassed = true;
+            attemptFinish();
+        }, 10000);
+
+        // 2. TTS Logic
+        if (config.tts_enabled && currentTip.message) {
+            const targetLang = currentTip.language || 'en';
+            const saysMap: Record<string, string> = {
+                'pl': 'mówi',
+                'de': 'sagt',
+                'fr': 'dit',
+                'es': 'dice',
+                'it': 'dice',
+                'ru': 'говорит',
+                'zh': '说',
+                'zh-HK': '說',
+                'ja': 'が言いました',
+                'ko': '가 말했습니다',
+                'pt': 'diz',
+                'tr': 'diyor ki',
+                'uk': 'каже',
+                'ar': 'يقول',
+                'hi': 'कहते हैं',
+                'en': 'says'
+            };
+            const saysWord = saysMap[targetLang] || 'says';
+            const textToSpeak = `${currentTip.sender} ${saysWord}: ${currentTip.message}`;
+
+            const speech = new SpeechSynthesisUtterance(textToSpeak);
+            speech.lang = targetLang;
+
+            const voices = window.speechSynthesis.getVoices();
+            const selectedVoice = voices.find(v => v.lang.startsWith(targetLang));
+
+            if (selectedVoice) {
+                speech.voice = selectedVoice;
+                console.log(`TTS: Using voice: ${selectedVoice.name}`);
+            }
+
+            speech.onend = () => {
+                console.log("TTS Ended");
+                tipFinishedSpeaking = true;
+                attemptFinish();
+            };
+
+            speech.onerror = (event) => {
+                console.error("TTS Error details:", event);
+                if (event.error === 'not-allowed') {
+                    console.log("Autoplay blocked. Showing overlay.");
+                    setInteractionNeeded(true);
+                }
+                // Even on error, we mark it as "spoken" so the queue doesn't hang forever
+                tipFinishedSpeaking = true;
+                attemptFinish();
+            };
+
+            // Safety fallback: if speech takes excessively long (e.g. browser bug), force close after 60s
+            // This prevents the queue from locking up if onend/onerror never fires.
+            setTimeout(() => {
+                if (!tipFinishedSpeaking) {
+                    console.warn("TTS timed out, forcing next.");
+                    tipFinishedSpeaking = true;
+                    attemptFinish();
+                }
+            }, 60000);
+
+
+            window.speechSynthesis.cancel(); // Cancel any previous speech
+
+            // Small delay to allow cancel to process
+            setTimeout(() => {
+                window.speechSynthesis.speak(speech);
+            }, 100);
+        } else {
+            // No TTS, so "speaking" is done immediately
+            tipFinishedSpeaking = true;
+            attemptFinish();
+        }
+
+        return () => { isCleanedUp = true; window.speechSynthesis.cancel(); };
+    }, [currentTip, config.tts_enabled]);
 
     return (
         <div
@@ -264,9 +300,9 @@ export default function WidgetPage() {
             )}
 
             <AnimatePresence>
-                {alert && (
+                {currentTip && (
                     <TipWidget
-                        tip={alert}
+                        tip={currentTip}
                         config={config}
                         isPreview={false}
                     />
