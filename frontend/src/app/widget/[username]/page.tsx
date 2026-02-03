@@ -97,7 +97,14 @@ export default function WidgetPage() {
                                 attemptClose();
                             };
 
-                            speech.onerror = () => {
+                            // Log available voices to ensure system is ready
+                            const voices = window.speechSynthesis.getVoices();
+                            if (voices.length > 0) {
+                                // optional: ensure we pick a voice?
+                            }
+
+                            speech.onerror = (event) => {
+                                console.error("TTS Error details:", event);
                                 console.error("TTS Error, closing widget");
                                 tipFinishedSpeaking = true;
                                 attemptClose();
@@ -107,7 +114,11 @@ export default function WidgetPage() {
                             setTimeout(() => setAlert(null), 60000);
 
                             window.speechSynthesis.cancel(); // Cancel any previous speech
-                            window.speechSynthesis.speak(speech);
+
+                            // Small delay to allow cancel to process
+                            setTimeout(() => {
+                                window.speechSynthesis.speak(speech);
+                            }, 100);
                         } else {
                             // No TTS, so "speaking" is done immediately
                             tipFinishedSpeaking = true;
