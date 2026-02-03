@@ -117,6 +117,9 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus }: LifiTipProps)
         address: address,
         chainId: selectedChainId,
         token: (selectedAsset?.address === "0x0000000000000000000000000000000000000000" || !selectedAsset) ? undefined : selectedAsset.address as `0x${string}`,
+        query: {
+            enabled: !!address && isConnected,
+        }
     });
 
     // Strategy: We can't fetch balances for ALL tokens (too many).
@@ -145,13 +148,19 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus }: LifiTipProps)
             chainId: selectedChainId,
         })),
         query: {
-            enabled: !!address && tokensToCheck.length > 0,
-            refetchInterval: 10000,
+            enabled: !!address && isConnected && tokensToCheck.length > 0,
+            refetchInterval: 60000,
         }
     });
 
     // Native Balance for sorting
-    const { data: nativeBalance } = useBalance({ address, chainId: selectedChainId });
+    const { data: nativeBalance } = useBalance({
+        address,
+        chainId: selectedChainId,
+        query: {
+            enabled: !!address && isConnected,
+        }
+    });
 
     // Computed Sorted Tokens
     const sortedTokens = useMemo(() => {

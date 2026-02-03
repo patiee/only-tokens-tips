@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { useAccount } from "wagmi";
 import { LifiTip } from "@/components/LifiTip";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ArrowLeft, ExternalLink, Globe, Twitter } from "lucide-react";
 
 // Define interface matching backend/db/model/model.go
@@ -130,11 +131,13 @@ export default function TipPage() {
 
                 {/* Simplified Content - LiFi Only */}
                 <div className="p-6">
-                    <LifiTip
-                        recipientAddress={user.eth_address}
-                        onSuccess={handleSuccess}
-                        onStatus={setStatus}
-                    />
+                    <ErrorBoundary>
+                        <LifiTip
+                            recipientAddress={user.eth_address}
+                            onSuccess={handleSuccess}
+                            onStatus={setStatus}
+                        />
+                    </ErrorBoundary>
                 </div>
             </div>
         </div>
