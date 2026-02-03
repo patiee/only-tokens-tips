@@ -258,7 +258,7 @@ function DashboardContent() {
                                                     <td className="py-3 px-4 text-green-400 font-mono">
                                                         {tip.amount} {tip.asset || "ETH"}
                                                     </td>
-                                                    <td className="py-3 px-4 text-zinc-300 max-w-xs truncate" title={tip.message}>
+                                                    <td className="py-3 px-4 text-zinc-300 break-words whitespace-normal min-w-[200px]">
                                                         {tip.message}
                                                     </td>
                                                     <td className="py-3 px-4">
