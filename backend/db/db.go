@@ -60,6 +60,21 @@ func (d *Database) UpdateUserWallet(userID uint, ethAddress string) error {
 	return d.conn.Model(&model.User{}).Where("id = ?", userID).Update("eth_address", ethAddress).Error
 }
 
+func (d *Database) UpdateUserProfile(userID uint, username, ethAddress string, mainWallet bool) error {
+	updates := map[string]interface{}{
+		"username":    username,
+		"eth_address": ethAddress,
+		"main_wallet": mainWallet,
+	}
+	return d.conn.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
+}
+
+func (d *Database) CheckUsernameTaken(username string, excludeUserID uint) bool {
+	var count int64
+	d.conn.Model(&model.User{}).Where("username = ? AND id != ?", username, excludeUserID).Count(&count)
+	return count > 0
+}
+
 func (d *Database) UpdateWidgetConfig(userID uint, tts bool, bg, userColor, amountColor, msgColor string) error {
 	return d.conn.Model(&model.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
 		"widget_tts":           tts,

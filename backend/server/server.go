@@ -60,14 +60,16 @@ func (s *Server) Start(port string) {
 	// CORS configuration
 	config := cors.DefaultConfig()
 	if s.config.CORSEnabled {
-		s.logger.Println("CORS: Enabling Access-Control-Allow-Origin: *")
+		// Force permissive CORS for development/demo
 		config.AllowAllOrigins = true
+		s.logger.Println("CORS: Enabling permissive CORS for all origins")
 	} else {
-		// Fallback for dev or specific handling
 		config.AllowOrigins = []string{"http://localhost:3000", "https://localhost:3000"}
+		s.logger.Println("CORS: Enabling CORS for specific origins")
 	}
-
 	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
+	config.AllowCredentials = true // Allow cookies/auth headers
+
 	r.Use(cors.New(config))
 
 	// WebSocket endpoint for OBS widget
@@ -99,72 +101,58 @@ func (s *Server) Start(port string) {
 }
 
 func (s *Server) HandleSignup(c *gin.Context) {
-	var req model.SignupRequest
+	// This endpoint is now "Complete Profile / Update Username"
+	// It expects a valid SESSION token (Authorization header)
+	authHeader := c.GetHeader("Authorization")
+	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid token"})
+		return
+	}
+	tokenString := authHeader[7:]
 
+	claims, err := s.ValidateSessionToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	var req model.SignupRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		s.logger.Printf("Signup error: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Verify Signup Token
-	claims, err := s.ValidateSignupToken(req.SignupToken)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid signup token"})
-		return
-	}
-
-	// Check if username exists
-	if _, err := s.db.GetUserByUsername(req.Username); err == nil {
+	// Check if username is taken (by someone else)
+	if s.db.CheckUsernameTaken(req.Username, claims.UserID) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Username already taken"})
 		return
 	}
 
-	user := dbmodel.User{
-		Username:   req.Username,
-		Provider:   claims.Provider,
-		ProviderID: claims.ProviderID,
-		Email:      claims.Email,
-		AvatarURL:  claims.Avatar,
-		EthAddress: req.EthAddress,
-		MainWallet: req.MainWallet,
-		CreatedAt:  time.Now(),
-	}
-
-	if err := s.db.CreateUser(&user); err != nil {
-		// Check if it failed because user already exists (ProviderID collision)
-		// Since we verified the signup token which contains trusted ProviderID,
-		// if the user exists with this ProviderID, we can safely log them in.
-		existingUser, fetchErr := s.db.GetUserByProviderID(claims.Provider, claims.ProviderID)
-		if fetchErr == nil {
-			// User exists! seamless login.
-			token, tokenErr := s.GenerateSessionToken(existingUser)
-			if tokenErr != nil {
-				s.logger.Printf("Failed to generate token for existing user: %v", tokenErr)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
-				return
-			}
-			s.logger.Printf("User already exists, seamless login: %s", existingUser.Username)
-			c.JSON(http.StatusOK, gin.H{"message": "User logged in", "user": existingUser, "token": token})
-			return
-		}
-
-		s.logger.Printf("Failed to create user: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user or username taken"})
-		return
-	}
-
-	// New user created
-	token, err := s.GenerateSessionToken(&user) // Generate session token immediately for auto-login
+	// Update the existing user
+	err = s.db.UpdateUserProfile(claims.UserID, req.Username, req.EthAddress, req.MainWallet)
 	if err != nil {
-		s.logger.Printf("User created but failed to generate token: %v", err)
-		// Client will have to login manually, but user is created.
-		c.JSON(http.StatusCreated, gin.H{"message": "User created", "user": user})
+		s.logger.Printf("Failed to complete profile for user %d: %v", claims.UserID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
 		return
 	}
 
-	s.logger.Printf("User created: %s", user.Username)
-	c.JSON(http.StatusCreated, gin.H{"message": "User created", "user": user, "token": token})
+	// Re-fetch updated user to generate new token if username changed
+	updatedUser, err := s.db.GetUserByUsername(req.Username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refresh user"})
+		return
+	}
+
+	// Generate new token with updated username claim
+	newToken, err := s.GenerateSessionToken(updatedUser)
+	if err != nil {
+		s.logger.Printf("Failed to generate token for updated user %d: %v", updatedUser.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate session token"})
+		return
+	}
+
+	s.logger.Printf("User profile completed: %s", updatedUser.Username)
+	c.JSON(http.StatusOK, gin.H{"message": "Profile updated", "user": updatedUser, "token": newToken})
 }
 
 func (s *Server) HandleLogin(c *gin.Context) {

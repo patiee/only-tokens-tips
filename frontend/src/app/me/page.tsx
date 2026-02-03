@@ -170,6 +170,15 @@ function DashboardContent() {
                         >
                             <ExternalLink size={16} /> Public Page
                         </Link>
+                        <button
+                            onClick={() => {
+                                localStorage.removeItem("user_token");
+                                router.push("/");
+                            }}
+                            className="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-lg font-medium transition-colors border border-red-500/20"
+                        >
+                            Logout
+                        </button>
                     </div>
                 </header>
 

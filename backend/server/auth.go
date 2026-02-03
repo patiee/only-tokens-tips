@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	dbmodel "github.com/patiee/backend/db/model"
 	"github.com/patiee/backend/server/model"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -71,7 +73,12 @@ func (s *Server) HandleOAuthLogin(c *gin.Context) {
 		return
 	}
 
-	url := config.AuthCodeURL(oauthState)
+	var authURLOptions []oauth2.AuthCodeOption
+	if provider == "google" {
+		authURLOptions = append(authURLOptions, oauth2.SetAuthURLParam("prompt", "select_account"))
+	}
+
+	url := config.AuthCodeURL(oauthState, authURLOptions...)
 	c.Redirect(http.StatusTemporaryRedirect, url)
 }
 
@@ -126,15 +133,39 @@ func (s *Server) HandleOAuthCallback(c *gin.Context) {
 		}
 		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://localhost:3000/me?token=%s", token))
 	} else {
-		// New User -> Signup Flow
-		// Generate verified Signup Token
-		signupToken, err := s.GenerateSignupToken(provider, userProfile.ID, userProfile.Email, userProfile.Avatar)
+		// New User -> Create immediately with temp username
+		// We'll let them change username in step 2
+		tempUsername := fmt.Sprintf("user_%s_%s", provider, userProfile.ID)
+		if len(tempUsername) > 20 {
+			tempUsername = tempUsername[:20] // Truncate if too long
+		}
+
+		newUser := dbmodel.User{
+			Username:   tempUsername,
+			Provider:   provider,
+			ProviderID: userProfile.ID,
+			Email:      userProfile.Email,
+			AvatarURL:  userProfile.Avatar,
+			CreatedAt:  time.Now(),
+		}
+
+		// Create in DB
+		if err := s.db.CreateUser(&newUser); err != nil {
+			s.logger.Printf("Failed to auto-create user: %v", err)
+			c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/signup?error=create_failed")
+			return
+		}
+
+		// Generate Session Token
+		token, err := s.GenerateSessionToken(&newUser)
 		if err != nil {
-			s.logger.Printf("Failed to generate signup token: %v", err)
+			s.logger.Printf("Failed to generate session token: %v", err)
 			c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/signup?error=token_err")
 			return
 		}
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://localhost:3000/signup?step=2&signup_token=%s", signupToken))
+
+		// Redirect to Signup Step 2 (Update Username) with Session Token
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://localhost:3000/signup?step=2&token=%s", token))
 	}
 }
 

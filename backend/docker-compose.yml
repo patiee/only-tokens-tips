@@ -21,6 +21,7 @@ services:
       - PORT=${PORT}
       - CERT_FILE=/app/certs/server.crt
       - KEY_FILE=/app/certs/server.key
+      - CORS_ENABLED=${CORS_ENABLED}
     restart: always
 
   db:

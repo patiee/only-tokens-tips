@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Twitch, Monitor, Chrome, ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -14,6 +14,15 @@ export default function LoginPage() {
 }
 
 function LoginContent() {
+    const router = useRouter();
+
+    useEffect(() => {
+        const token = localStorage.getItem("user_token");
+        if (token) {
+            router.push("/me");
+        }
+    }, [router]);
+
     const handleSocialLogin = (provider: string) => {
         // Backend handles logic: If user exists -> Login, If new -> Signup
         // We just point to the same auth endpoints
