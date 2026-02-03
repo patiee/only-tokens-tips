@@ -35,14 +35,12 @@ export default function Home() {
           >
             Start Receiving Tips <ArrowRight size={20} />
           </Link>
-          <a
-            href="https://github.com/only-tokens-tips"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href="/login"
             className="rounded-full border border-zinc-700 bg-zinc-900/50 px-8 py-3.5 font-medium text-white hover:bg-zinc-800 transition-all"
           >
-            View on GitHub
-          </a>
+            Log In
+          </Link>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-16 w-full text-left">
@@ -58,8 +56,8 @@ export default function Home() {
           />
           <FeatureCard
             icon={<div className="text-green-400 font-bold">$</div>}
-            title="0% Fees"
-            desc="We don't take a cut. You keep 100% of tips."
+            title="1% Fee"
+            desc="Low 1% platform fee to support development."
           />
         </div>
       </main>

@@ -30,6 +30,7 @@ function SignupContent() {
         const error = searchParams.get("error");
         if (error) {
             console.error("Signup error:", error);
+            alert(`Signup Failed: ${error}`); // Visible alert
             return;
         }
 
@@ -43,9 +44,7 @@ function SignupContent() {
         const signupToken = searchParams.get("signup_token"); // Signup continue
         if (signupToken) {
             try {
-                // Decode token just to show provider info (or just trust param if we prefer)
-                // We'll decode to get the provider name for UI if possible, 
-                // but really we just need to store the token.
+                // Decode token just to show provider info
                 const decoded: any = jwtDecode(signupToken);
 
                 setFormData(prev => ({
@@ -54,15 +53,16 @@ function SignupContent() {
                     signup_token: signupToken,
                 }));
                 setStep(2);
-            } catch (e) {
+            } catch (e: any) {
                 console.error("Invalid signup token", e);
+                alert("Failed to decode signup token. Please try again.");
             }
         }
     }, [searchParams, router]);
 
     // Step 1: OAuth (Real)
     const handleSocialLogin = (provider: string) => {
-        window.location.href = `https://localhost:8080/auth/${provider}/login`;
+        window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/auth/${provider}/login`;
     };
 
     // Step 2: Username

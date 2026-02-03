@@ -16,6 +16,7 @@ export type UserProfile = {
 function DashboardContent() {
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [copied, setCopied] = useState(false);
+    const [error, setError] = useState("");
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -24,30 +25,32 @@ function DashboardContent() {
 
         if (token) {
             localStorage.setItem("user_token", token);
-            // Clear token from URL to be clean (optional, but nice)
             window.history.replaceState({}, "", "/me");
         } else {
             token = localStorage.getItem("user_token");
         }
 
         if (!token) {
+            // Keep redirect for missing token, but maybe add delay?
             router.push("/signup");
             return;
         }
 
-        fetch("https://localhost:8080/api/me?token=" + token)
+        setError("");
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/me?token=` + token)
             .then(res => {
-                if (!res.ok) throw new Error("Failed to fetch");
+                if (!res.ok) {
+                    if (res.status === 401) throw new Error("Unauthorized (Invalid Token)");
+                    throw new Error(`Failed to fetch profile (${res.status})`);
+                }
                 return res.json();
             })
             .then(data => setProfile(data))
             .catch(err => {
-                console.log("Failed to fetch profile", err);
-                // If token is invalid (401), maybe redirect to signup?
-                if (token) localStorage.removeItem("user_token");
-                router.push("/signup");
+                console.error("Failed to fetch profile", err);
+                setError(err.message || "Connection failed");
+                // Do NOT redirect, let user see the error
             });
-
     }, [router, searchParams]);
 
     const copyToClipboard = () => {
@@ -57,6 +60,36 @@ function DashboardContent() {
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
+
+    if (error) return (
+        <div className="min-h-screen flex items-center justify-center bg-black text-white p-4">
+            <div className="bg-zinc-900 border border-red-900/50 p-6 rounded-2xl max-w-md w-full text-center">
+                <div className="w-16 h-16 bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <UserIcon className="text-red-500" size={32} />
+                </div>
+                <h2 className="text-xl font-bold mb-2 text-white">Dashboard Access Failed</h2>
+                <p className="text-zinc-400 mb-6 font-mono text-sm bg-black/50 p-2 rounded border border-zinc-800 break-all">
+                    {error}
+                </p>
+
+                <p className="text-zinc-500 text-xs mb-6">
+                    If "Connection failed", ensure backend is running or accept the self-signed certificate.
+                </p>
+
+                <div className="flex gap-3 justify-center">
+                    <a href={`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/me`} target="_blank" className="px-4 py-2 bg-zinc-800 rounded hover:bg-zinc-700 text-sm">
+                        Test Connection
+                    </a>
+                    <button
+                        onClick={() => { localStorage.removeItem("user_token"); router.push("/login"); }}
+                        className="px-4 py-2 bg-red-600 rounded hover:bg-red-500 text-sm font-bold"
+                    >
+                        Log Out
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 
     if (!profile) return (
         <div className="min-h-screen flex items-center justify-center bg-black text-white">
@@ -111,9 +144,17 @@ function DashboardContent() {
                         {/* Widget Card */}
                         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 relative overflow-hidden group">
                             <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 blur-[50px] rounded-full pointer-events-none group-hover:bg-purple-500/20 transition-all" />
-                            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                                <TrendingUp className="text-purple-400" /> Overlay Widget
-                            </h3>
+                            <div className="flex justify-between items-start mb-4">
+                                <h3 className="text-lg font-bold flex items-center gap-2">
+                                    <TrendingUp className="text-purple-400" /> Overlay Widget
+                                </h3>
+                                <Link
+                                    href="/me/widget"
+                                    className="text-xs font-semibold text-purple-400 hover:text-purple-300 bg-purple-900/20 hover:bg-purple-900/30 px-3 py-1.5 rounded-full transition-colors"
+                                >
+                                    Edit
+                                </Link>
+                            </div>
                             <p className="text-zinc-400 text-sm mb-4">
                                 Add this URL as a Browser Source in OBS to show tips on stream.
                             </p>
@@ -131,11 +172,18 @@ function DashboardContent() {
                             </div>
                         </div>
 
-                        {/* Wallet Card */}
                         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-                            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                                <Wallet className="text-blue-400" /> Wallet
-                            </h3>
+                            <div className="flex justify-between items-start mb-4">
+                                <h3 className="text-lg font-bold flex items-center gap-2">
+                                    <Wallet className="text-blue-400" /> Wallet
+                                </h3>
+                                <Link
+                                    href="/me/wallets"
+                                    className="text-xs font-semibold text-blue-400 hover:text-blue-300 bg-blue-900/20 hover:bg-blue-900/30 px-3 py-1.5 rounded-full transition-colors"
+                                >
+                                    Edit
+                                </Link>
+                            </div>
                             <div className="bg-zinc-950 rounded-xl p-4 border border-zinc-800 flex items-center justify-between group cursor-pointer hover:border-zinc-700 transition-colors">
                                 <div className="font-mono text-sm text-zinc-300 truncate pr-4">
                                     {profile.eth_address}
@@ -175,7 +223,7 @@ export default function DashboardPage() {
         <Suspense fallback={
             <div className="min-h-screen flex items-center justify-center bg-black text-white">
                 <div className="flex flex-col items-center gap-4">
-                     <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
                 </div>
             </div>
         }>

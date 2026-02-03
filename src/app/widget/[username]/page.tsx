@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
-import { Wallet } from "lucide-react";
+import { AnimatePresence } from "framer-motion";
+import { TipWidget } from "@/components/TipWidget";
 
 type Tip = {
     sender: string;
@@ -16,73 +16,107 @@ export default function WidgetPage() {
     const params = useParams();
     const username = params.username as string;
     const [alert, setAlert] = useState<Tip | null>(null);
+    const [connected, setConnected] = useState(false);
+    const [config, setConfig] = useState({
+        tts_enabled: false,
+        background_color: "#000000",
+        user_color: "#ffffff",
+        amount_color: "#22c55e",
+        message_color: "#ffffff"
+    });
 
-    // Poll for new tips
+    // Fetch Widget Config
     useEffect(() => {
-        const interval = setInterval(() => {
-            // Mock fetching "pending" tips from backend queue
-            // In real impl, we'd act on unread tips
-            // For now, let's just keep it empty until we wire up specific "widget" poll endpoint
-            // or use a websocket.
-
-            // fetch(`/api/widget/${username}/poll`)....
-        }, 5000);
-
-        return () => clearInterval(interval);
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/user/${username}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.username) {
+                    setConfig({
+                        tts_enabled: data.widget_tts || false,
+                        background_color: data.widget_bg_color || "#000000",
+                        user_color: data.widget_user_color || "#ffffff",
+                        amount_color: data.widget_amount_color || "#22c55e",
+                        message_color: data.widget_message_color || "#ffffff"
+                    });
+                }
+            })
+            .catch(console.error);
     }, [username]);
 
-    // Test effect to show animation for dev
+    // WebSocket Connection
     useEffect(() => {
-        // Trigger a test alert on load
-        // setAlert({ sender: "Anonymous", amount: "0.05", message: "Great stream! Keep it up!", asset: "ETH" });
-        // setTimeout(() => setAlert(null), 8000);
-    }, []);
+        const wsUrl = (process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080').replace("http", "ws") + `/ws/${username}`;
+        let socket: WebSocket;
+
+        const connect = () => {
+            socket = new WebSocket(wsUrl);
+
+            socket.onopen = () => {
+                console.log("Widget connected to WS");
+                setConnected(true);
+            };
+
+            socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === "TIP") {
+                        const newTip: Tip = {
+                            sender: data.sender || "Anonymous",
+                            amount: data.amount || "0",
+                            message: data.message || "",
+                            asset: "ETH" // simplified for MVP
+                        };
+
+                        // Show Alert
+                        setAlert(newTip);
+
+                        // TTS
+                        // TTS & duration logic
+                        if (config.tts_enabled && newTip.message) {
+                            const speech = new SpeechSynthesisUtterance(`${newTip.sender} says: ${newTip.message}`);
+
+                            // Keep widget open until speech ends
+                            speech.onend = () => {
+                                setAlert(null);
+                            };
+
+                            // Safety fallback: if speech takes excessively long or fails to trigger onend, close after 45s
+                            setTimeout(() => setAlert(null), 45000);
+
+                            window.speechSynthesis.speak(speech);
+                        } else {
+                            // Standard duration if no TTS
+                            setTimeout(() => setAlert(null), 8000);
+                        }
+                    }
+                } catch (e) {
+                    console.error("WS Parse Error", e);
+                }
+            };
+
+            socket.onclose = () => {
+                console.log("WS Disconnected, retrying...");
+                setConnected(false);
+                setTimeout(connect, 3000);
+            };
+        };
+
+        connect();
+        return () => socket?.close();
+    }, [username, config.tts_enabled]); // Re-connect if TTS changes? Actually just reading config ref inside would be better but this is fine
 
     return (
         <div className="min-h-screen bg-transparent flex items-end justify-center p-8 overflow-hidden font-sans">
+            {/* Connection Status Indicator (Hidden in OBS usually, but good for debug) */}
+            <div className={`fixed top-4 right-4 w-3 h-3 rounded-full ${connected ? "bg-green-500" : "bg-red-500 animate-pulse"} shadow-md border border-white/20`} title={connected ? "Connected" : "Disconnected"} />
+
             <AnimatePresence>
                 {alert && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 50, scale: 0.9 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -20, scale: 0.9 }}
-                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                        className="relative w-full max-w-lg"
-                    >
-                        {/* Glow effect */}
-                        <div className="absolute inset-0 bg-blue-600/20 blur-3xl rounded-full animate-pulse" />
-
-                        <div className="relative bg-zinc-900/95 border-2 border-blue-500/50 rounded-3xl p-6 shadow-2xl backdrop-blur-xl overflow-hidden">
-                            {/* Accent line */}
-                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 via-blue-500 to-green-400" />
-
-                            <div className="flex items-start gap-4">
-                                <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 p-1 shadow-lg shrink-0">
-                                    <div className="w-full h-full rounded-full bg-black flex items-center justify-center">
-                                        <Wallet className="text-white w-8 h-8" />
-                                    </div>
-                                </div>
-
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-baseline gap-2 flex-wrap">
-                                        <span className="text-2xl font-bold text-white drop-shadow-md">
-                                            {alert.sender}
-                                        </span>
-                                        <span className="text-lg text-zinc-400">sent</span>
-                                        <span className="text-3xl font-extrabold text-green-400 drop-shadow-md">
-                                            {alert.amount} {alert.asset}
-                                        </span>
-                                    </div>
-
-                                    {alert.message && (
-                                        <div className="mt-2 text-xl font-medium text-blue-100 italic break-words leading-snug">
-                                            "{alert.message}"
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </motion.div>
+                    <TipWidget
+                        tip={alert}
+                        config={config}
+                        isPreview={false}
+                    />
                 )}
             </AnimatePresence>
         </div>
