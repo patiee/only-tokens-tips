@@ -50,8 +50,12 @@ function DashboardContent() {
             .then(data => setProfile(data))
             .catch(err => {
                 console.error("Failed to fetch profile", err);
+                if (err.message.includes("Unauthorized")) {
+                    localStorage.removeItem("user_token"); // Clear invalid token
+                    router.push("/");
+                    return;
+                }
                 setError(err.message || "Connection failed");
-                // Do NOT redirect, let user see the error
             });
 
         // Fetch Recent Tips
@@ -62,7 +66,10 @@ function DashboardContent() {
             }
         })
             .then(res => {
-                if (res.status === 401) throw new Error("Unauthorized");
+                if (res.status === 401) {
+                    // trigger catch block
+                    throw new Error("Unauthorized");
+                }
                 return res.json();
             })
             .then(data => {
@@ -74,7 +81,13 @@ function DashboardContent() {
                     setTips(data);
                 }
             })
-            .catch(console.error);
+            .catch(err => {
+                if (err.message === "Unauthorized") {
+                    localStorage.removeItem("user_token");
+                    router.push("/");
+                }
+                console.error(err);
+            });
     }, [router, searchParams]);
 
     const copyToClipboard = () => {

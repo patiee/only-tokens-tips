@@ -45,6 +45,7 @@ function WidgetSettingsContent() {
         // Fetch current settings (via /api/me)
         fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/me?token=` + token)
             .then(res => {
+                if (res.status === 401) throw new Error("Unauthorized");
                 if (!res.ok) throw new Error("Failed to load profile");
                 return res.json();
             })
@@ -60,6 +61,11 @@ function WidgetSettingsContent() {
             })
             .catch(err => {
                 console.error(err);
+                if (err.message === "Unauthorized") {
+                    localStorage.removeItem("user_token");
+                    router.push("/");
+                    return;
+                }
                 setError("Failed to load settings");
                 setLoading(false);
             });
@@ -82,6 +88,12 @@ function WidgetSettingsContent() {
                 },
                 body: JSON.stringify(settings)
             });
+
+            if (res.status === 401) {
+                localStorage.removeItem("user_token");
+                router.push("/");
+                return;
+            }
 
             if (!res.ok) {
                 const data = await res.json();
