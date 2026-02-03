@@ -72,21 +72,47 @@ export default function WidgetPage() {
 
                         // TTS
                         // TTS & duration logic
+                        const minimumDuration = 10000; // 10s minimum
+                        let tipFinishedSpeaking = false;
+                        let tipMinDurationPassed = false;
+
+                        const attemptClose = () => {
+                            if (tipFinishedSpeaking && tipMinDurationPassed) {
+                                setAlert(null);
+                            }
+                        };
+
+                        // 1. Start Minimum Duration Timer
+                        setTimeout(() => {
+                            tipMinDurationPassed = true;
+                            attemptClose();
+                        }, minimumDuration);
+
+                        // 2. Handle TTS or No-TTS path
                         if (config.tts_enabled && newTip.message) {
                             const speech = new SpeechSynthesisUtterance(`${newTip.sender} says: ${newTip.message}`);
 
-                            // Keep widget open until speech ends
                             speech.onend = () => {
-                                setAlert(null);
+                                tipFinishedSpeaking = true;
+                                attemptClose();
                             };
 
-                            // Safety fallback: if speech takes excessively long or fails to trigger onend, close after 45s
-                            setTimeout(() => setAlert(null), 45000);
+                            speech.onerror = () => {
+                                console.error("TTS Error, closing widget");
+                                tipFinishedSpeaking = true;
+                                attemptClose();
+                            };
 
+                            // Safety fallback: if speech takes excessively long (e.g. browser bug), force close after 60s
+                            setTimeout(() => setAlert(null), 60000);
+
+                            window.speechSynthesis.cancel(); // Cancel any previous speech
                             window.speechSynthesis.speak(speech);
                         } else {
-                            // Standard duration if no TTS
-                            setTimeout(() => setAlert(null), 8000);
+                            // No TTS, so "speaking" is done immediately
+                            tipFinishedSpeaking = true;
+                            // Attempt close (will likely just wait for min timer)
+                            attemptClose();
                         }
                     }
                 } catch (e) {
