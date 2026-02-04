@@ -323,3 +323,7 @@ func (s *Service) CreateUser(user *dbmodel.User) error {
 func (s *Service) IsWalletBlacklisted(address string) bool {
 	return s.db.IsWalletBlacklisted(address)
 }
+
+func (s *Service) CleanupExpiredSessions() error {
+	return s.db.CleanupExpiredSessions()
+}

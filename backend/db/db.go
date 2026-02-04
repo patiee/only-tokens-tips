@@ -157,3 +157,20 @@ func (d *Database) IsWalletBlacklisted(address string) bool {
 		Count(&count)
 	return count > 0
 }
+
+func (d *Database) CleanupExpiredSessions() error {
+	now := time.Now()
+	// Clean Wallet Sessions
+	if err := d.conn.Where("expires_at < ?", now).Delete(&model.WalletSession{}).Error; err != nil {
+		d.logger.Printf("Error cleaning wallet sessions: %v", err)
+	}
+	// Clean User Sessions
+	if err := d.conn.Where("expires_at < ?", now).Delete(&model.UserSession{}).Error; err != nil {
+		d.logger.Printf("Error cleaning user sessions: %v", err)
+	}
+	// Clean Blacklist (Expired bans)
+	if err := d.conn.Where("expires_at < ?", now).Delete(&model.WalletBlacklist{}).Error; err != nil {
+		d.logger.Printf("Error cleaning blacklist: %v", err)
+	}
+	return nil
+}

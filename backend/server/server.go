@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -132,6 +133,34 @@ func (s *Server) Start(port string) {
 	r.GET("/api/user/:username", s.HandleGetUser)
 	r.POST("/api/tip", s.HandleTip)
 	r.GET("/api/me/tips", s.HandleGetTips)
+
+	// Start Background Cleanup Job (Every 24h)
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			s.logger.Println("Running daily session cleanup...")
+			if err := s.service.db.CleanupExpiredSessions(); err != nil {
+				s.logger.Printf("Failed to clean expired sessions: %v", err)
+			} else {
+				s.logger.Println("Daily session cleanup completed.")
+			}
+		}
+	}()
+
+	// Start Background Cleanup Job (Every 24h)
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			s.logger.Println("Running daily session cleanup...")
+			if err := s.service.CleanupExpiredSessions(); err != nil {
+				s.logger.Printf("Failed to clean expired sessions: %v", err)
+			} else {
+				s.logger.Println("Daily session cleanup completed.")
+			}
+		}
+	}()
 
 	s.logger.Printf("Server starting on :%s", port)
 	if s.config.CertFile != "" && s.config.KeyFile != "" {
