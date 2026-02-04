@@ -137,3 +137,23 @@ func (d *Database) GetUserSession(token string) (*model.UserSession, error) {
 	}
 	return &session, nil
 }
+func (d *Database) RevokeWalletSessions(walletAddress string) error {
+	return d.conn.Where("wallet_address = ?", walletAddress).Delete(&model.WalletSession{}).Error
+}
+
+func (d *Database) BlacklistWallet(address string, reason string, duration time.Duration) error {
+	return d.conn.Create(&model.WalletBlacklist{
+		WalletAddress: address,
+		Reason:        reason,
+		CreatedAt:     time.Now(),
+		ExpiresAt:     time.Now().Add(duration),
+	}).Error
+}
+
+func (d *Database) IsWalletBlacklisted(address string) bool {
+	var count int64
+	d.conn.Model(&model.WalletBlacklist{}).
+		Where("wallet_address = ? AND expires_at > ?", address, time.Now()).
+		Count(&count)
+	return count > 0
+}

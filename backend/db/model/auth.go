@@ -13,7 +13,14 @@ type UsedSignature struct {
 
 // Migrate adds the model to the database
 func AutoMigrateAuth(db *gorm.DB) error {
-	return db.AutoMigrate(&UsedSignature{}, &WalletSession{}, &UserSession{})
+	return db.AutoMigrate(&UsedSignature{}, &WalletSession{}, &UserSession{}, &WalletBlacklist{})
+}
+
+type WalletBlacklist struct {
+	WalletAddress string    `gorm:"primaryKey" json:"wallet_address"`
+	Reason        string    `json:"reason"`
+	CreatedAt     time.Time `json:"created_at"`
+	ExpiresAt     time.Time `json:"expires_at"` // Optional: for temporary bans
 }
 
 type WalletSession struct {

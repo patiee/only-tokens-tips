@@ -212,6 +212,12 @@ func (s *Service) HandleWalletLogin(c *gin.Context) {
 		return
 	}
 
+	// 1b. Check Blacklist
+	if s.IsWalletBlacklisted(req.Address) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Wallet is blacklisted"})
+		return
+	}
+
 	// 2. Check Replay Attack (Used Signature)
 	if s.IsSignatureUsed(req.Signature) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Signature already used"})

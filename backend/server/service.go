@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -17,20 +18,32 @@ import (
 	"github.com/patiee/backend/server/model"
 )
 
+var (
+	ErrTxNotFound     = errors.New("tx receipt not found")
+	ErrSenderMismatch = errors.New("sender mismatch")
+)
+
 type Service struct {
 	db        *db.Database
 	config    Config
 	logger    *log.Logger
 	clients   map[*websocket.Conn]bool
 	clientsMu sync.Mutex
+
+	// Security
+	securityMu sync.Mutex
+	lastTipReq map[string]time.Time // Wallet -> Last Request Time
+	strikes    map[string]int       // Wallet -> Strike Count
 }
 
 func NewService(db *db.Database, config Config, logger *log.Logger) *Service {
 	return &Service{
-		db:      db,
-		config:  config,
-		logger:  logger,
-		clients: make(map[*websocket.Conn]bool),
+		db:         db,
+		config:     config,
+		logger:     logger,
+		clients:    make(map[*websocket.Conn]bool),
+		lastTipReq: make(map[string]time.Time),
+		strikes:    make(map[string]int),
 	}
 }
 
@@ -114,14 +127,62 @@ func (s *Service) UpdateWidgetConfig(userID uint, req model.UpdateWidgetRequest)
 }
 
 func (s *Service) ProcessTip(tip model.TipRequest, claims *WalletClaims) (bool, string, error) {
+	// 0. Blacklist Check
+	if s.db.IsWalletBlacklisted(claims.WalletAddress) {
+		return false, "Wallet is blacklisted.", nil
+	}
+
+	s.securityMu.Lock()
+	// 1. Rate Limit Check (1 request per 5 seconds)
+	lastTime, exists := s.lastTipReq[claims.WalletAddress]
+	if exists && time.Since(lastTime) < 5*time.Second {
+		s.securityMu.Unlock()
+		return false, "Rate limit exceeded. Please wait 5 seconds.", nil
+	}
+	s.lastTipReq[claims.WalletAddress] = time.Now()
+	s.securityMu.Unlock()
+
 	// Verify Tx
 	verified, err := s.verifyTransaction(tip.ChainID, tip.TxHash, claims.WalletAddress, tip.Amount, tip.Asset)
 	if err != nil {
+		// Only strike for specific malicious-looking errors
+		if errors.Is(err, ErrTxNotFound) || errors.Is(err, ErrSenderMismatch) {
+			s.securityMu.Lock()
+			s.strikes[claims.WalletAddress]++
+			strikeCount := s.strikes[claims.WalletAddress]
+			s.securityMu.Unlock()
+
+			if strikeCount >= 3 {
+				// REVOKE SESSION
+				if revokeErr := s.db.RevokeWalletSessions(claims.WalletAddress); revokeErr != nil {
+					s.logger.Printf("Failed to revoke session for %s: %v", claims.WalletAddress, revokeErr)
+				}
+
+				// ADD TO BLACKLIST (24 Hours)
+				if blErr := s.db.BlacklistWallet(claims.WalletAddress, "3 strikes: invalid transactions", 24*time.Hour); blErr != nil {
+					s.logger.Printf("Failed to blacklist wallet %s: %v", claims.WalletAddress, blErr)
+				}
+
+				s.securityMu.Lock()
+				delete(s.strikes, claims.WalletAddress)
+				s.securityMu.Unlock()
+
+				return false, "Session revoked and wallet blacklisted for 24h due to multiple invalid requests.", fmt.Errorf("session revoked and blacklisted")
+			}
+		}
+
 		return false, "", err
 	}
 	if !verified {
 		return false, "Transaction not valid", nil
 	}
+
+	// Success - Reset Strikes (Optional: Rewards good behavior)
+	s.securityMu.Lock()
+	if _, ok := s.strikes[claims.WalletAddress]; ok {
+		delete(s.strikes, claims.WalletAddress)
+	}
+	s.securityMu.Unlock()
 
 	// Notify
 	s.NotifyWidgets(tip)
@@ -218,7 +279,7 @@ func (s *Service) verifyTransaction(chainID string, txHash string, expectedSende
 	// 1. Check Receipt Status
 	receipt, err := client.TransactionReceipt(ctx, hash)
 	if err != nil {
-		return false, fmt.Errorf("tx receipt not found (pending?): %v", err)
+		return false, fmt.Errorf("%w: %v", ErrTxNotFound, err)
 	}
 
 	if receipt.Status != 1 {
@@ -237,7 +298,7 @@ func (s *Service) verifyTransaction(chainID string, txHash string, expectedSende
 	}
 
 	if !strings.EqualFold(from.Hex(), expectedSender) {
-		return false, fmt.Errorf("sender mismatch: tx.from=%s, token.owner=%s", from.Hex(), expectedSender)
+		return false, fmt.Errorf("%w: tx.from=%s, token.owner=%s", ErrSenderMismatch, from.Hex(), expectedSender)
 	}
 
 	return true, nil
@@ -257,4 +318,8 @@ func (s *Service) GetUserByProviderID(provider, providerID string) (*dbmodel.Use
 
 func (s *Service) CreateUser(user *dbmodel.User) error {
 	return s.db.CreateUser(user)
+}
+
+func (s *Service) IsWalletBlacklisted(address string) bool {
+	return s.db.IsWalletBlacklisted(address)
 }
