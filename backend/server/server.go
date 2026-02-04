@@ -4,15 +4,22 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
-	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/patiee/backend/db"
-	dbmodel "github.com/patiee/backend/db/model"
 	"github.com/patiee/backend/server/model"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
+	"golang.org/x/oauth2/twitch"
+)
+
+var (
+	googleConfig *oauth2.Config
+	twitchConfig *oauth2.Config
+	kickConfig   *oauth2.Config
+	oauthState   = "random-string-verification" // In prod, use random state per request
 )
 
 type Config struct {
@@ -29,24 +36,57 @@ type Config struct {
 }
 
 type Server struct {
-	config    Config
-	logger    *log.Logger
-	db        *db.Database
-	clients   map[*websocket.Conn]bool
-	clientsMu sync.Mutex
-	upgrader  websocket.Upgrader
+	config   Config
+	logger   *log.Logger
+	service  *Service
+	upgrader websocket.Upgrader // Upgrader is HTTP specific, keep here
 }
 
 func New(logger *log.Logger, database *db.Database, config Config) *Server {
+	service := NewService(database, config, logger)
 	return &Server{
 		config:  config,
 		logger:  logger,
-		db:      database,
-		clients: make(map[*websocket.Conn]bool),
+		service: service,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true // Allow all origins for OBS
 			},
+		},
+	}
+}
+
+func (s *Server) InitOAuth() {
+	// Google
+	googleConfig = &oauth2.Config{
+		ClientID:     s.config.GoogleClientID,
+		ClientSecret: s.config.GoogleClientSecret,
+		RedirectURL:  "https://localhost:8080/auth/google/callback",
+		Scopes: []string{
+			"https://www.googleapis.com/auth/userinfo.email",
+			"https://www.googleapis.com/auth/userinfo.profile",
+		},
+		Endpoint: google.Endpoint,
+	}
+
+	// Twitch
+	twitchConfig = &oauth2.Config{
+		ClientID:     s.config.TwitchClientID,
+		ClientSecret: s.config.TwitchClientSecret,
+		RedirectURL:  "https://localhost:8080/auth/twitch/callback",
+		Scopes:       []string{"user:read:email"},
+		Endpoint:     twitch.Endpoint,
+	}
+
+	// Kick
+	kickConfig = &oauth2.Config{
+		ClientID:     s.config.KickClientID,
+		ClientSecret: s.config.KickClientSecret,
+		RedirectURL:  "https://localhost:8080/auth/kick/callback",
+		Scopes:       []string{"user:read"}, // Verify scope in Kick docs
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  "https://id.kick.com/oauth/authorize", // Verify this
+			TokenURL: "https://id.kick.com/oauth/token",     // Verify this
 		},
 	}
 }
@@ -59,16 +99,19 @@ func (s *Server) Start(port string) {
 
 	// CORS configuration
 	config := cors.DefaultConfig()
+
 	if s.config.CORSEnabled {
-		// Force permissive CORS for development/demo
 		config.AllowAllOrigins = true
+		config.AllowOrigins = nil // Explicitly clear to avoid conflict panic
 		s.logger.Println("CORS: Enabling permissive CORS for all origins")
 	} else {
-		config.AllowOrigins = []string{"http://localhost:3000", "https://localhost:3000"}
-		s.logger.Println("CORS: Enabling CORS for specific origins")
+		// Always allow both HTTP and HTTPS localhost
+		config.AllowOrigins = []string{"http://localhost:3000", "https://localhost:3000", "http://127.0.0.1:3000"}
+		s.logger.Println("CORS: Enabling CORS for localhost origins")
 	}
-	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
-	config.AllowCredentials = true // Allow cookies/auth headers
+	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "Accept"}
+	config.ExposeHeaders = []string{"Content-Length"}
+	config.AllowCredentials = true
 
 	r.Use(cors.New(config))
 
@@ -78,8 +121,9 @@ func (s *Server) Start(port string) {
 	// Auth endpoints
 	r.POST("/auth/signup", s.HandleSignup)
 	r.POST("/auth/login", s.HandleLogin)
-	r.GET("/auth/:provider/login", s.HandleOAuthLogin)
-	r.GET("/auth/:provider/callback", s.HandleOAuthCallback)
+	r.GET("/auth/:provider/login", s.service.HandleOAuthLogin)
+	r.GET("/auth/:provider/callback", s.service.HandleOAuthCallback)
+	r.POST("/auth/wallet-login", s.service.HandleWalletLogin)
 
 	// API endpoints
 	r.GET("/api/me", s.HandleMe)
@@ -101,8 +145,6 @@ func (s *Server) Start(port string) {
 }
 
 func (s *Server) HandleSignup(c *gin.Context) {
-	// This endpoint is now "Complete Profile / Update Username"
-	// It expects a valid SESSION token (Authorization header)
 	authHeader := c.GetHeader("Authorization")
 	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid token"})
@@ -110,7 +152,7 @@ func (s *Server) HandleSignup(c *gin.Context) {
 	}
 	tokenString := authHeader[7:]
 
-	claims, err := s.ValidateSessionToken(tokenString)
+	claims, err := s.service.ValidateSessionToken(tokenString)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 		return
@@ -122,32 +164,15 @@ func (s *Server) HandleSignup(c *gin.Context) {
 		return
 	}
 
-	// Check if username is taken (by someone else)
-	if s.db.CheckUsernameTaken(req.Username, claims.UserID) {
+	if s.service.CheckUsernameTaken(req.Username, claims.UserID) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Username already taken"})
 		return
 	}
 
-	// Update the existing user
-	err = s.db.UpdateUserProfile(claims.UserID, req.Username, req.EthAddress, req.MainWallet)
+	updatedUser, newToken, err := s.service.CompleteUserProfile(claims.UserID, req.Username, req.EthAddress, req.MainWallet)
 	if err != nil {
-		s.logger.Printf("Failed to complete profile for user %d: %v", claims.UserID, err)
+		s.logger.Printf("Failed to complete profile: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
-		return
-	}
-
-	// Re-fetch updated user to generate new token if username changed
-	updatedUser, err := s.db.GetUserByUsername(req.Username)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refresh user"})
-		return
-	}
-
-	// Generate new token with updated username claim
-	newToken, err := s.GenerateSessionToken(updatedUser)
-	if err != nil {
-		s.logger.Printf("Failed to generate token for updated user %d: %v", updatedUser.ID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate session token"})
 		return
 	}
 
@@ -156,14 +181,12 @@ func (s *Server) HandleSignup(c *gin.Context) {
 }
 
 func (s *Server) HandleLogin(c *gin.Context) {
-	// Mock login
 	c.JSON(http.StatusOK, gin.H{"message": "Login endpoint (Mock)"})
 }
 
 func (s *Server) HandleMe(c *gin.Context) {
 	tokenString := c.Query("token")
 	if tokenString == "" {
-		// Also check Authorization header
 		authHeader := c.GetHeader("Authorization")
 		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
 			tokenString = authHeader[7:]
@@ -175,27 +198,14 @@ func (s *Server) HandleMe(c *gin.Context) {
 		return
 	}
 
-	// Support legacy mock token for fresh signups if needed (optional, but better to unify)
-	if len(tokenString) > 11 && tokenString[:11] == "mock_token_" {
-		username := tokenString[11:]
-		user, err := s.db.GetUserByUsername(username)
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
-			return
-		}
-		c.JSON(http.StatusOK, user)
-		return
-	}
-
-	// Validate JWT
-	claims, err := s.ValidateSessionToken(tokenString)
+	claims, err := s.service.ValidateSessionToken(tokenString)
 	if err != nil {
 		s.logger.Printf("Invalid session token: %v", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 		return
 	}
 
-	user, err := s.db.GetUserByUsername(claims.Username)
+	user, err := s.service.GetUserByUsername(claims.Username)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
@@ -206,13 +216,12 @@ func (s *Server) HandleMe(c *gin.Context) {
 
 func (s *Server) HandleGetUser(c *gin.Context) {
 	username := c.Param("username")
-	user, err := s.db.GetUserByUsername(username)
+	user, err := s.service.GetUserByUsername(username)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
 
-	// Return only public info
 	c.JSON(http.StatusOK, gin.H{
 		"username":             user.Username,
 		"eth_address":          user.EthAddress,
@@ -221,15 +230,11 @@ func (s *Server) HandleGetUser(c *gin.Context) {
 		"widget_user_color":    user.WidgetUserColor,
 		"widget_amount_color":  user.WidgetAmountColor,
 		"widget_message_color": user.WidgetMessageColor,
+		"avatar_url":           user.AvatarURL,
 	})
 }
 
 func (s *Server) HandleUpdateWallet(c *gin.Context) {
-	// 1. Get user from token/context (middleware?)
-	// Not using middleware yet, but HandleMe does token validation.
-	// We should extract token validation if we add more protected routes,
-	// but for now I'll duplicate the quick check or grab from header.
-
 	authHeader := c.GetHeader("Authorization")
 	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid token"})
@@ -237,23 +242,21 @@ func (s *Server) HandleUpdateWallet(c *gin.Context) {
 	}
 	tokenString := authHeader[7:]
 
-	claims, err := s.ValidateSessionToken(tokenString)
+	claims, err := s.service.ValidateSessionToken(tokenString)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 		return
 	}
 
-	// 2. Parse request
 	var req model.UpdateWalletRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return
 	}
 
-	// 3. Update DB
-	err = s.db.UpdateUserWallet(claims.UserID, req.EthAddress)
+	err = s.service.UpdateUserWallet(claims.UserID, req.EthAddress)
 	if err != nil {
-		s.logger.Printf("Failed to update wallet for user %d: %v", claims.UserID, err)
+		s.logger.Printf("Failed to update wallet: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update wallet"})
 		return
 	}
@@ -270,7 +273,7 @@ func (s *Server) HandleUpdateWidget(c *gin.Context) {
 	}
 	tokenString := authHeader[7:]
 
-	claims, err := s.ValidateSessionToken(tokenString)
+	claims, err := s.service.ValidateSessionToken(tokenString)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 		return
@@ -282,9 +285,9 @@ func (s *Server) HandleUpdateWidget(c *gin.Context) {
 		return
 	}
 
-	err = s.db.UpdateWidgetConfig(claims.UserID, req.WaitTTS, req.BgColor, req.UserColor, req.AmountColor, req.MessageColor)
+	err = s.service.UpdateWidgetConfig(claims.UserID, req)
 	if err != nil {
-		s.logger.Printf("Failed to update widget config for user %d: %v", claims.UserID, err)
+		s.logger.Printf("Failed to update widget config: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update widget settings"})
 		return
 	}
@@ -294,6 +297,21 @@ func (s *Server) HandleUpdateWidget(c *gin.Context) {
 }
 
 func (s *Server) HandleTip(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+		s.logger.Println("Tip rejected: Missing Authorization header")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid token"})
+		return
+	}
+	tokenString := authHeader[7:]
+
+	claims, err := s.service.ValidateWalletToken(tokenString)
+	if err != nil {
+		s.logger.Printf("Tip rejected: Invalid token: %v", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid session token"})
+		return
+	}
+
 	var tip model.TipRequest
 	if err := c.ShouldBindJSON(&tip); err != nil {
 		s.logger.Printf("Tip error: %v", err)
@@ -301,35 +319,24 @@ func (s *Server) HandleTip(c *gin.Context) {
 		return
 	}
 
-	// TODO: Verify transaction on Sui/Sepolia Network here using tip.TxHash
-	// For MVP, we assume the frontend is truthful, but in production, verify!
-
-	s.logger.Printf("New tip received: %+v", tip)
-
-	// Notify connected widgets
-	s.notifyWidgets(tip)
-
-	// Save to DB
-	dbTip := &dbmodel.Tip{
-		StreamerID:    tip.StreamerID,
-		Sender:        tip.Sender,
-		Message:       tip.Message,
-		Amount:        tip.Amount,
-		Asset:         tip.Asset,
-		TxHash:        tip.TxHash,
-		ChainID:       tip.ChainID,
-		SourceChain:   tip.SourceChain,
-		DestChain:     tip.DestChain,
-		SourceAddress: tip.SourceAddress,
-		DestAddress:   tip.DestAddress,
+	// Delegate processing to Service
+	success, msg, err := s.service.ProcessTip(tip, claims)
+	if err != nil {
+		// Technical Error
+		s.logger.Printf("ProcessTip error: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
-	if err := s.db.CreateTip(dbTip); err != nil {
-		s.logger.Printf("Failed to save tip to DB: %v", err)
-		// Don't fail the request, just log it. The widget was notified.
+	if !success {
+		// Logic Error / Validation Failed
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Tip processed"})
+	// Success
+	s.logger.Printf("New tip processed: %+v", tip)
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": msg})
 }
 
 func (s *Server) HandleGetTips(c *gin.Context) {
@@ -340,14 +347,15 @@ func (s *Server) HandleGetTips(c *gin.Context) {
 	}
 	tokenString := authHeader[7:]
 
-	claims, err := s.ValidateSessionToken(tokenString)
+	_, err := s.service.ValidateSessionToken(tokenString)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 		return
 	}
 
-	// Parse Limit
-	limit := 10 // Default
+	claims, err := s.service.ValidateSessionToken(tokenString) // Duplicate check but safe
+
+	limit := 10
 	if l := c.Query("limit"); l != "" {
 		fmt.Sscanf(l, "%d", &limit)
 	}
@@ -355,46 +363,16 @@ func (s *Server) HandleGetTips(c *gin.Context) {
 		limit = 50
 	}
 
-	// Parse Cursor
 	var cursor uint64
 	if cur := c.Query("cursor"); cur != "" {
 		fmt.Sscanf(cur, "%d", &cursor)
 	}
 
-	// Fetch tips
-	tips, err := s.db.GetTipsPaginated(claims.Username, limit, uint(cursor))
+	responseItems, nextCursor, err := s.service.GetTips(claims.Username, limit, uint(cursor))
 	if err != nil {
-		s.logger.Printf("Failed to fetch tips for %s: %v", claims.Username, err)
+		s.logger.Printf("Failed to fetch tips: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tips"})
 		return
-	}
-
-	// Build Response
-	var nextCursor string
-	if len(tips) > 0 {
-		// Since we ordered DESC, the last item has the smallest ID.
-		// Next cursor should be that ID.
-		lastTip := tips[len(tips)-1]
-		nextCursor = fmt.Sprintf("%d", lastTip.ID)
-
-		// Optimization: If we fetched less than limit, we are at the end.
-		if len(tips) < limit {
-			nextCursor = ""
-		}
-	}
-
-	// Convert to Response Items
-	responseItems := make([]model.TipResponseItem, 0, len(tips))
-	for _, t := range tips {
-		responseItems = append(responseItems, model.TipResponseItem{
-			CreatedAt:   t.CreatedAt.Format(time.RFC3339),
-			Sender:      t.Sender,
-			Message:     t.Message,
-			Amount:      t.Amount,
-			Asset:       t.Asset,
-			TxHash:      t.TxHash,
-			SourceChain: t.SourceChain,
-		})
 	}
 
 	c.JSON(http.StatusOK, model.TipsResponse{
@@ -411,48 +389,16 @@ func (s *Server) HandleWS(c *gin.Context) {
 		return
 	}
 
-	s.clientsMu.Lock()
-	s.clients[conn] = true
-	s.clientsMu.Unlock()
-
+	s.service.RegisterClient(conn)
 	s.logger.Printf("New OBS widget connected for streamer: %s", streamerId)
 
-	// Keep connection alive
 	go func() {
-		defer func() {
-			s.clientsMu.Lock()
-			delete(s.clients, conn)
-			s.clientsMu.Unlock()
-			conn.Close()
-		}()
+		defer s.service.UnregisterClient(conn)
 		for {
-			// Read message (ignore for now, just keep alive)
 			_, _, err := conn.ReadMessage()
 			if err != nil {
 				break
 			}
 		}
 	}()
-}
-
-func (s *Server) notifyWidgets(tip model.TipRequest) {
-	notification := model.TipNotification{
-		Type:       "TIP",
-		StreamerID: tip.StreamerID,
-		Sender:     tip.Sender,
-		Message:    tip.Message,
-		Amount:     tip.Amount,
-	}
-
-	s.clientsMu.Lock()
-	defer s.clientsMu.Unlock()
-
-	for client := range s.clients {
-		err := client.WriteJSON(notification)
-		if err != nil {
-			s.logger.Printf("WS write error: %v", err)
-			client.Close()
-			delete(s.clients, client)
-		}
-	}
 }

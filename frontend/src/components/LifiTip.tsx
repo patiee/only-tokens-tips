@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useAccount, useSendTransaction, useBalance, useSwitchChain, useReadContracts, useWriteContract, useConfig, useDisconnect } from "wagmi";
+import { useWalletAuth } from "@/hooks/useWalletAuth";
 import { readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { parseEther, formatEther, erc20Abi, parseUnits } from "viem";
 import { mainnet, base, optimism } from "wagmi/chains";
@@ -39,6 +40,7 @@ interface LifiTipProps {
         destChain: string;
         sourceAddress: string;
         destAddress: string;
+        token: string;
     }) => void;
     onStatus: (status: string) => void;
 }
@@ -49,6 +51,7 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus }: LifiTipProps)
     const { disconnect } = useDisconnect();
     const { sendTransactionAsync } = useSendTransaction();
     const config = useConfig();
+    const { authenticate } = useWalletAuth();
 
     const [amount, setAmount] = useState("");
     const [message, setMessage] = useState("");
@@ -61,6 +64,13 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus }: LifiTipProps)
     const [assetDropdownOpen, setAssetDropdownOpen] = useState(false);
     const [tokens, setTokens] = useState<Token[]>([]);
     const [selectedAsset, setSelectedAsset] = useState<Token | null>(null);
+
+    // Auto-authenticate when wallet connects
+    useEffect(() => {
+        if (isConnected && address) {
+            authenticate().catch(e => console.log("Auto-auth skipped/failed", e));
+        }
+    }, [isConnected, address, authenticate]);
 
     const [loading, setLoading] = useState(false);
 
@@ -229,6 +239,18 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus }: LifiTipProps)
         setError(""); // Clear previous errors
 
         try {
+            // 0. Authenticate (SIWE) - Prevent fake tips
+            onStatus("Verifying Wallet Ownership...");
+            let token = "";
+            try {
+                token = await authenticate() || "";
+            } catch (authErr) {
+                console.error("Auth failed", authErr);
+                setError("Authentication failed. Please sign the message to verify ownership.");
+                setLoading(false);
+                return;
+            }
+
             // 0. Ensure we are on the correct chain
             if (chain?.id !== selectedChainId) {
                 onStatus(`Switching to ${CHAINS.find(c => c.id === selectedChainId)?.name || "selected chain"}...`);
@@ -236,12 +258,6 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus }: LifiTipProps)
             }
 
             onStatus("Processing Fee & Quote...");
-            // 1. Calculate Fee internally for logging/display if needed, but LiFi handles the split.
-            // We request a quote for the FULL amount, and LiFi subtracts the fee?
-            // "The fee parameter represents the percentage of the integrator's fee that will be deducted from every transaction"
-            // So if user sends 100, and fee is 0.01. The bridge gets 99, we get 1.
-
-            // We don't need to manually send the fee anymore!
 
             onStatus("Fetching quote from LI.FI (with 1% fee)...");
 
@@ -339,7 +355,8 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus }: LifiTipProps)
                 sourceChain: selectedChainId.toString(),
                 destChain: base.id.toString(), // Hardcoded per plan
                 sourceAddress: address as string,
-                destAddress: recipientAddress
+                destAddress: recipientAddress,
+                token
             });
 
         } catch (e: any) {

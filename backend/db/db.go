@@ -33,7 +33,7 @@ func (d *Database) Init(dsn string) (err error) {
 	d.logger.Println("Database connected successfully")
 
 	// Migrate the schema
-	return d.conn.AutoMigrate(&model.User{}, &model.Tip{})
+	return d.conn.AutoMigrate(&model.User{}, &model.Tip{}, &model.UsedSignature{}, &model.WalletSession{}, &model.UserSession{})
 }
 
 func (d *Database) GetUserByUsername(username string) (user *model.User, err error) {
@@ -99,4 +99,41 @@ func (d *Database) GetTipsPaginated(streamerID string, limit int, cursor uint) (
 
 	err := query.Find(&tips).Error
 	return tips, err
+}
+
+func (d *Database) IsSignatureUsed(signature string) bool {
+	var count int64
+	d.conn.Model(&model.UsedSignature{}).Where("signature = ?", signature).Count(&count)
+	return count > 0
+}
+
+func (d *Database) MarkSignatureUsed(signature string) error {
+	return d.conn.Create(&model.UsedSignature{
+		Signature: signature,
+		CreatedAt: time.Now(),
+	}).Error
+}
+
+func (d *Database) SaveWalletSession(session *model.WalletSession) error {
+	return d.conn.Create(session).Error
+}
+
+func (d *Database) GetWalletSession(token string) (*model.WalletSession, error) {
+	var session model.WalletSession
+	if err := d.conn.Where("token = ?", token).First(&session).Error; err != nil {
+		return nil, err
+	}
+	return &session, nil
+}
+
+func (d *Database) SaveUserSession(session *model.UserSession) error {
+	return d.conn.Create(session).Error
+}
+
+func (d *Database) GetUserSession(token string) (*model.UserSession, error) {
+	var session model.UserSession
+	if err := d.conn.Where("token = ?", token).First(&session).Error; err != nil {
+		return nil, err
+	}
+	return &session, nil
 }

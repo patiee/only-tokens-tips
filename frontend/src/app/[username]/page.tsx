@@ -44,11 +44,15 @@ export default function TipPage() {
         destChain: string;
         sourceAddress: string;
         destAddress: string;
+        token: string;
     }) => {
         if (!data.txHash) return;
         fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/tip`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${data.token}`
+            },
             body: JSON.stringify({
                 streamerId: username,
                 sender: data.sender || "Anonymous",
@@ -66,8 +70,8 @@ export default function TipPage() {
     }, [username]);
 
     const handleSuccess = useCallback((data: any) => {
-        // Map LifiTip data to backend params (rename senderName -> sender)
-        notifyBackend({ ...data, sender: data.senderName });
+        // Map LifiTip data to backend params (rename senderName -> sender, include token)
+        notifyBackend({ ...data, sender: data.senderName, token: data.token });
         setStatus("Success! Tip sent.");
     }, [notifyBackend]);
 

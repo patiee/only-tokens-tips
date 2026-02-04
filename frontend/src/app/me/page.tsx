@@ -23,14 +23,17 @@ function DashboardContent() {
 
     useEffect(() => {
         console.log("Dashboard mounted");
-        let token = searchParams.get("token");
+        const urlToken = searchParams.get("token");
 
-        if (token) {
-            localStorage.setItem("user_token", token);
-            window.history.replaceState({}, "", "/me");
-        } else {
-            token = localStorage.getItem("user_token");
+        // If token is in URL (from Login redirect), save it and clean URL
+        if (urlToken) {
+            console.log("New token detected, saving and refreshing...");
+            localStorage.setItem("user_token", urlToken);
+            router.replace("/me"); // This will trigger useEffect again with clean URL
+            return;
         }
+
+        const token = localStorage.getItem("user_token");
 
         if (!token) {
             // Keep redirect for missing token, but maybe add delay?

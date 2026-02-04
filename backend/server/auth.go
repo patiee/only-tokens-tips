@@ -2,62 +2,21 @@ package server
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
 	dbmodel "github.com/patiee/backend/db/model"
 	"github.com/patiee/backend/server/model"
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
-	"golang.org/x/oauth2/twitch"
 )
 
-var (
-	googleConfig *oauth2.Config
-	twitchConfig *oauth2.Config
-	kickConfig   *oauth2.Config
-	oauthState   = "random-string-verification" // In prod, use random state per request
-)
-
-func (s *Server) InitOAuth() {
-	// Google
-	googleConfig = &oauth2.Config{
-		ClientID:     s.config.GoogleClientID,
-		ClientSecret: s.config.GoogleClientSecret,
-		RedirectURL:  "https://localhost:8080/auth/google/callback",
-		Scopes: []string{
-			"https://www.googleapis.com/auth/userinfo.email",
-			"https://www.googleapis.com/auth/userinfo.profile",
-		},
-		Endpoint: google.Endpoint,
-	}
-
-	// Twitch
-	twitchConfig = &oauth2.Config{
-		ClientID:     s.config.TwitchClientID,
-		ClientSecret: s.config.TwitchClientSecret,
-		RedirectURL:  "https://localhost:8080/auth/twitch/callback",
-		Scopes:       []string{"user:read:email"},
-		Endpoint:     twitch.Endpoint,
-	}
-
-	// Kick
-	kickConfig = &oauth2.Config{
-		ClientID:     s.config.KickClientID,
-		ClientSecret: s.config.KickClientSecret,
-		RedirectURL:  "https://localhost:8080/auth/kick/callback",
-		Scopes:       []string{"user:read"}, // Verify scope in Kick docs
-		Endpoint: oauth2.Endpoint{
-			AuthURL:  "https://id.kick.com/oauth/authorize", // Verify this
-			TokenURL: "https://id.kick.com/oauth/token",     // Verify this
-		},
-	}
-}
-
-func (s *Server) HandleOAuthLogin(c *gin.Context) {
+func (s *Service) HandleOAuthLogin(c *gin.Context) {
 	provider := c.Param("provider")
 	var config *oauth2.Config
 
@@ -82,7 +41,7 @@ func (s *Server) HandleOAuthLogin(c *gin.Context) {
 	c.Redirect(http.StatusTemporaryRedirect, url)
 }
 
-func (s *Server) HandleOAuthCallback(c *gin.Context) {
+func (s *Service) HandleOAuthCallback(c *gin.Context) {
 	provider := c.Param("provider")
 	state := c.Query("state")
 	code := c.Query("code")
@@ -120,7 +79,7 @@ func (s *Server) HandleOAuthCallback(c *gin.Context) {
 	}
 
 	// Check if user exists
-	existingUser, err := s.db.GetUserByProviderID(provider, userProfile.ID)
+	existingUser, err := s.GetUserByProviderID(provider, userProfile.ID)
 
 	// Create/Update Logic
 	if err == nil {
@@ -150,7 +109,7 @@ func (s *Server) HandleOAuthCallback(c *gin.Context) {
 		}
 
 		// Create in DB
-		if err := s.db.CreateUser(&newUser); err != nil {
+		if err := s.CreateUser(&newUser); err != nil {
 			s.logger.Printf("Failed to auto-create user: %v", err)
 			c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/signup?error=create_failed")
 			return
@@ -169,7 +128,7 @@ func (s *Server) HandleOAuthCallback(c *gin.Context) {
 	}
 }
 
-func (s *Server) fetchUserProfile(provider, accessToken string, logger interface{}) (*model.UserProfile, error) {
+func (s *Service) fetchUserProfile(provider, accessToken string, logger interface{}) (*model.UserProfile, error) {
 	var user model.UserProfile
 	client := &http.Client{}
 
@@ -230,4 +189,109 @@ func (s *Server) fetchUserProfile(provider, accessToken string, logger interface
 	}
 
 	return &user, nil
+}
+
+// Struct for Wallet Login
+type WalletLoginRequest struct {
+	Address   string `json:"address" binding:"required"`
+	Timestamp int64  `json:"timestamp" binding:"required"`
+	Signature string `json:"signature" binding:"required"`
+}
+
+func (s *Service) HandleWalletLogin(c *gin.Context) {
+	var req WalletLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
+
+	// 1. Verify Timestamp (within 1 hour)
+	now := time.Now().Unix()
+	if req.Timestamp < now-3600 || req.Timestamp > now+300 { // 1h past, 5m future buffer
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Timestamp too old or invalid"})
+		return
+	}
+
+	// 2. Check Replay Attack (Used Signature)
+	if s.IsSignatureUsed(req.Signature) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Signature already used"})
+		return
+	}
+
+	// 3. Verify Signature
+	// Message format must match frontend: `{"address":"%s","timestamp":%d}`
+	msg := fmt.Sprintf(`{"address":"%s","timestamp":%d}`, req.Address, req.Timestamp)
+	isValid, err := verifySignature(req.Address, msg, req.Signature)
+	if err != nil || !isValid {
+		s.logger.Printf("Signature verification failed for %s: %v", req.Address, err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid signature"})
+		return
+	}
+
+	// 4. Mark Signature as Used
+	if err := s.MarkSignatureUsed(req.Signature); err != nil {
+		s.logger.Printf("Failed to mark signature used: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	// 5. Generate Session Token
+	token, err := s.GenerateWalletToken(req.Address)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"token": token, "expires_in": 86400})
+}
+
+// verifySignature checks if the signature matches the address for the given message
+// Uses go-ethereum crypto
+func verifySignature(address, message, signatureHex string) (bool, error) {
+	// 1. Decode Signature (Hex -> Bytes)
+	// Remove 0x prefix if present
+	if len(signatureHex) > 2 && signatureHex[:2] == "0x" {
+		signatureHex = signatureHex[2:]
+	}
+	sigBytes, err := hex.DecodeString(signatureHex)
+	if err != nil {
+		return false, fmt.Errorf("invalid hex signature")
+	}
+
+	// 2. Handle Signature V recovery ID (it's 27/28 or 0/1 depending on client)
+	// Ethereum crypto library expects 0/1
+	if len(sigBytes) != 65 {
+		return false, fmt.Errorf("invalid signature length")
+	}
+	if sigBytes[64] >= 27 {
+		sigBytes[64] -= 27
+	}
+
+	// 3. Hash the Message (EIP-191 personal sign format)
+	// prefix = "\x19Ethereum Signed Message:\n" + len(msg)
+	prefix := fmt.Sprintf("\x19Ethereum Signed Message:\n%d", len(message))
+	data := []byte(prefix + message)
+	hash := crypto.Keccak256Hash(data)
+
+	// 4. Recover Public Key
+	// We use SigToPub below, which wraps Ecrecover, but for EIP-191 we need to be careful.
+	// crypto.SigToPub(hash, sig) does the recovery.
+
+	// 5. Convert Public Key to Address
+	// Need to unmarshal the pubkey bytes to ECDSA pubkey then to address
+	// Ecrecover returns uncompressed pubkey bytes (65 bytes), first byte is 0x04
+	// remove first byte 0x04 (if present in Ecrecover result? Ecrecover returns 65 bytes usually)
+	// Actually crypto.UnmarshalPubkey expects it. But crypto.PubkeyToAddress takes *ecdsa.PublicKey.
+	// crypto.SigToPub is easier but it does hash internally which we already did? No, SigToPub takes raw hash.
+	// Let's use crypto.SigToPub which wraps Ecrecover
+
+	pubKey, err := crypto.SigToPub(hash.Bytes(), sigBytes)
+	if err != nil {
+		return false, err
+	}
+
+	recoveredAddr := crypto.PubkeyToAddress(*pubKey)
+
+	// 6. Compare Addresses (Case insensitive)
+	return strings.EqualFold(recoveredAddr.Hex(), address), nil
 }
