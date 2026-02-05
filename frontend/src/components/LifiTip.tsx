@@ -28,7 +28,7 @@ interface Token {
     decimals: number;
 }
 
-const POPULAR_SYMBOLS = ["ETH", "USDC", "USDT", "DAI", "WBTC", "WETH"];
+const POPULAR_SYMBOLS = ["ETH", "USDC", "USDT", "DAI", "WBTC", "WETH", "SOL"];
 
 const PRESET_AMOUNTS = ["0.001", "0.01", "0.05", "0.1"];
 
@@ -70,6 +70,8 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
     const [assetDropdownOpen, setAssetDropdownOpen] = useState(false);
     const [tokens, setTokens] = useState<Token[]>([]);
     const [selectedAsset, setSelectedAsset] = useState<Token | null>(null);
+    const [chainSearch, setChainSearch] = useState("");
+    const [assetSearch, setAssetSearch] = useState("");
 
     // Auto-authenticate when wallet connects
     useEffect(() => {
@@ -272,7 +274,7 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
 
             onStatus("Processing Fee & Quote...");
 
-            onStatus("Fetching quote from LI.FI (with 1% fee)...");
+            onStatus("Fetching quote from LI.FI...");
 
             const fromToken = selectedAsset.address;
             const toToken = "0x0000000000000000000000000000000000000000"; // Always tip ETH/Native on dest
@@ -402,22 +404,41 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
                         </button>
 
                         {chainDropdownOpen && (
-                            <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-60 overflow-y-auto">
-                                {CHAINS.map(c => (
-                                    <button
-                                        key={c.id}
-                                        type="button"
-                                        onClick={() => {
-                                            handleChainSelect(c.id);
-                                            setChainDropdownOpen(false);
-                                        }}
-                                        className="w-full text-left px-4 py-3 hover:bg-zinc-800 transition-colors flex items-center gap-2"
-                                    >
-                                        <img src={c.logo} alt={c.name} className="w-5 h-5 rounded-full" />
-                                        <span>{c.name}</span>
-                                        {selectedChainId === c.id && <Check size={16} className="ml-auto text-purple-500" />}
-                                    </button>
-                                ))}
+                            <div className="absolute top-0 left-0 right-0 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-60 overflow-y-auto flex flex-col">
+                                <div className="p-2 border-b border-zinc-800 sticky top-0 bg-zinc-900 z-10">
+                                    <input
+                                        type="text"
+                                        placeholder="Search network..."
+                                        value={chainSearch}
+                                        onChange={(e) => setChainSearch(e.target.value)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                                        autoFocus
+                                    />
+                                </div>
+                                <div className="overflow-y-auto">
+                                    {CHAINS
+                                        .filter((c: { name: string }) => c.name.toLowerCase().includes(chainSearch.toLowerCase()))
+                                        .map((c: { id: number; name: string; logo: string }) => (
+                                            <button
+                                                key={c.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    handleChainSelect(c.id);
+                                                    setChainDropdownOpen(false);
+                                                    setChainSearch("");
+                                                }}
+                                                className="w-full text-left px-4 py-3 hover:bg-zinc-800 transition-colors flex items-center gap-2"
+                                            >
+                                                <img src={c.logo} alt={c.name} className="w-5 h-5 rounded-full" />
+                                                <span>{c.name}</span>
+                                                {selectedChainId === c.id && <Check size={16} className="ml-auto text-purple-500" />}
+                                            </button>
+                                        ))}
+                                    {CHAINS.filter((c: { name: string }) => c.name.toLowerCase().includes(chainSearch.toLowerCase())).length === 0 && (
+                                        <div className="px-4 py-3 text-zinc-500 text-sm italic">No networks found</div>
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -455,44 +476,62 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
                         </button>
 
                         {assetDropdownOpen && (
-                            <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-60 overflow-y-auto">
-                                {sortedTokens.map((a, idx) => {
-                                    let balStr = "";
-                                    if (a.address === "0x0000000000000000000000000000000000000000") {
-                                        if (nativeBalance) balStr = `(${parseFloat(formatEther(nativeBalance.value)).toFixed(4)})`;
-                                    } else {
-                                        const checkIdx = tokensToCheck.findIndex(t => t.address === a.address);
-                                        if (checkIdx !== -1 && tokenBalances?.[checkIdx]?.result) {
-                                            const raw = tokenBalances[checkIdx].result as bigint;
-                                            if (raw > BigInt(0)) balStr = "(Has Balance)";
-                                        }
-                                    }
-
-                                    return (
-                                        <button
-                                            key={`${a.symbol}-${idx}`}
-                                            type="button"
-                                            onClick={() => {
-                                                setSelectedAsset(a);
-                                                setAssetDropdownOpen(false);
-                                            }}
-                                            className="w-full text-left px-4 py-3 hover:bg-zinc-800 transition-colors flex items-center gap-2"
-                                        >
-                                            {a.logo ? (
-                                                <img src={a.logo} alt={a.symbol} className="w-5 h-5 rounded-full" />
-                                            ) : (
-                                                <div className="w-5 h-5 rounded-full bg-zinc-800 flex items-center justify-center">
-                                                    <Coins size={12} className="text-zinc-400" />
-                                                </div>
-                                            )}
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-medium">{a.symbol}</span>
-                                                <span className="text-xs text-zinc-500">{a.name} {balStr}</span>
-                                            </div>
-                                            {selectedAsset?.symbol === a.symbol && <Check size={16} className="ml-auto text-purple-500" />}
-                                        </button>
-                                    );
-                                })}
+                            <div className="absolute top-0 left-0 right-0 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-60 overflow-y-auto flex flex-col">
+                                <div className="p-2 border-b border-zinc-800 sticky top-0 bg-zinc-900 z-10">
+                                    <input
+                                        type="text"
+                                        placeholder="Search asset..."
+                                        value={assetSearch}
+                                        onChange={(e) => setAssetSearch(e.target.value)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                                        autoFocus
+                                    />
+                                </div>
+                                <div className="overflow-y-auto">
+                                    {sortedTokens
+                                        .filter(t => t.symbol.toLowerCase().includes(assetSearch.toLowerCase()) || t.name.toLowerCase().includes(assetSearch.toLowerCase()))
+                                        .map((t) => {
+                                            let balStr = "";
+                                            if (t.address === "0x0000000000000000000000000000000000000000") {
+                                                if (nativeBalance) balStr = `(${parseFloat(formatEther(nativeBalance.value)).toFixed(4)})`;
+                                            } else {
+                                                const checkIdx = tokensToCheck.findIndex(tok => tok.address === t.address);
+                                                if (checkIdx !== -1 && tokenBalances?.[checkIdx]?.result) {
+                                                    const raw = tokenBalances[checkIdx].result as bigint;
+                                                    if (raw > BigInt(0)) balStr = "(Has Balance)";
+                                                }
+                                            }
+                                            return (
+                                                <button
+                                                    key={t.address}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedAsset(t);
+                                                        setAssetDropdownOpen(false);
+                                                        setAssetSearch("");
+                                                    }}
+                                                    className="w-full text-left px-4 py-3 hover:bg-zinc-800 transition-colors flex items-center gap-2"
+                                                >
+                                                    {t.logo ? (
+                                                        <img src={t.logo} alt={t.symbol} className="w-5 h-5 rounded-full" />
+                                                    ) : (
+                                                        <div className="w-5 h-5 rounded-full bg-zinc-800 flex items-center justify-center">
+                                                            <Coins size={12} className="text-zinc-400" />
+                                                        </div>
+                                                    )}
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm font-medium text-white">{t.symbol}</span>
+                                                        <span className="text-xs text-zinc-500">{t.name} {balStr}</span>
+                                                    </div>
+                                                    {selectedAsset?.address === t.address && <Check size={16} className="ml-auto text-purple-500" />}
+                                                </button>
+                                            );
+                                        })}
+                                    {sortedTokens.filter(t => t.symbol.toLowerCase().includes(assetSearch.toLowerCase()) || t.name.toLowerCase().includes(assetSearch.toLowerCase())).length === 0 && (
+                                        <div className="px-4 py-3 text-zinc-500 text-sm italic">No assets found</div>
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -501,146 +540,146 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
                         )}
                     </div>
                 </div>
-            </div>
 
-            {/* Amount Input */}
-            <div>
-                <div className="flex justify-between items-center mb-2">
-                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Amount</label>
-                    <div className="text-xs text-zinc-500 font-mono">
-                        Balance: {balanceData ? <span className="text-white">{parseFloat(formatEther(balanceData.value)).toFixed(4)} {balanceData.symbol}</span> : "..."}
+                {/* Amount Input */}
+                <div>
+                    <div className="flex justify-between items-center mb-2">
+                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Amount</label>
+                        <div className="text-xs text-zinc-500 font-mono">
+                            Balance: {balanceData ? <span className="text-white">{parseFloat(formatEther(balanceData.value)).toFixed(4)} {balanceData.symbol}</span> : "..."}
+                        </div>
+                    </div>
+
+                    <div className="relative group">
+                        <input
+                            type="number"
+                            placeholder="0.00"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-6 text-3xl font-bold text-center text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all placeholder:text-zinc-800 group-hover:border-zinc-700"
+                        />
+                        <div className="absolute top-1/2 right-4 -translate-y-1/2 text-zinc-500 font-bold pointer-events-none">{selectedAsset?.symbol}</div>
+                    </div>
+
+                    {/* Presets */}
+                    <div className="grid grid-cols-4 gap-2 mt-2">
+                        {PRESET_AMOUNTS.map((val) => (
+                            <button
+                                key={val}
+                                onClick={() => setAmount(val)}
+                                className={`py-2 text-xs font-medium rounded-lg border transition-all ${amount === val ? "bg-purple-600/20 border-purple-500/50 text-purple-200" : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:border-zinc-700"}`}
+                            >
+                                {val}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
-                <div className="relative group">
-                    <input
-                        type="number"
-                        placeholder="0.00"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-6 text-3xl font-bold text-center text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all placeholder:text-zinc-800 group-hover:border-zinc-700"
+                {/* Message Input */}
+                <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Message</label>
+                    <textarea
+                        placeholder="Write your tip message here..."
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all placeholder:text-zinc-700 resize-none h-24 text-sm"
                     />
-                    <div className="absolute top-1/2 right-4 -translate-y-1/2 text-zinc-500 font-bold pointer-events-none">{selectedAsset?.symbol}</div>
                 </div>
 
-                {/* Presets */}
-                <div className="grid grid-cols-4 gap-2 mt-2">
-                    {PRESET_AMOUNTS.map((val) => (
-                        <button
-                            key={val}
-                            onClick={() => setAmount(val)}
-                            className={`py-2 text-xs font-medium rounded-lg border transition-all ${amount === val ? "bg-purple-600/20 border-purple-500/50 text-purple-200" : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:border-zinc-700"}`}
-                        >
-                            {val}
-                        </button>
-                    ))}
+                {/* Name Input */}
+                <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Name</label>
+                    <input
+                        type="text"
+                        placeholder="Your Name (optional)"
+                        value={senderName}
+                        onChange={(e) => setSenderName(e.target.value)}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all placeholder:text-zinc-700 text-sm"
+                    />
                 </div>
-            </div>
 
-            {/* Message Input */}
-            <div className="space-y-2">
-                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Message</label>
-                <textarea
-                    placeholder="Write your tip message here..."
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all placeholder:text-zinc-700 resize-none h-24 text-sm"
-                />
-            </div>
-
-            {/* Name Input */}
-            <div className="space-y-2">
-                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Name</label>
-                <input
-                    type="text"
-                    placeholder="Your Name (optional)"
-                    value={senderName}
-                    onChange={(e) => setSenderName(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all placeholder:text-zinc-700 text-sm"
-                />
-            </div>
-
-            {/* Status & Error & Button */}
-            <div className="space-y-4">
-                {/* Wallet Status / Connect Button */}
-                <div className="w-full flex items-center justify-between px-4 py-3 bg-zinc-950/80 rounded-xl border border-zinc-800/50 backdrop-blur-sm shadow-sm transition-all hover:border-zinc-700">
-                    {isConnected && address ? (
-                        <>
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20">
-                                    <Wallet size={16} className="text-green-500" />
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Connected</span>
-                                    <span className="text-sm font-medium text-zinc-300 font-mono">
-                                        {address.slice(0, 6)}...{address.slice(-4)}
-                                    </span>
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => disconnect()}
-                                className="text-xs font-bold text-red-400 hover:text-red-300 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-500/10"
-                            >
-                                DISCONNECT
-                            </button>
-                        </>
-                    ) : (
-                        <div className="w-full">
-                            <ConnectButton.Custom>
-                                {({ openConnectModal }) => (
-                                    <button
-                                        onClick={openConnectModal}
-                                        className="w-full flex items-center justify-between group"
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 group-hover:bg-purple-500/20 transition-colors">
-                                                <Wallet size={16} className="text-purple-500" />
-                                            </div>
-                                            <div className="flex flex-col items-start">
-                                                <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Status</span>
-                                                <span className="text-sm font-medium text-zinc-300">Wallet Disconnected</span>
-                                            </div>
-                                        </div>
-                                        <span className="text-xs font-bold text-purple-400 group-hover:text-purple-300 transition-colors bg-purple-500/10 px-3 py-1.5 rounded-lg border border-purple-500/20">
-                                            CONNECT
+                {/* Status & Error & Button */}
+                <div className="space-y-4">
+                    {/* Wallet Status / Connect Button */}
+                    <div className="w-full flex items-center justify-between px-4 py-3 bg-zinc-950/80 rounded-xl border border-zinc-800/50 backdrop-blur-sm shadow-sm transition-all hover:border-zinc-700">
+                        {isConnected && address ? (
+                            <>
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20">
+                                        <Wallet size={16} className="text-green-500" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Connected</span>
+                                        <span className="text-sm font-medium text-zinc-300 font-mono">
+                                            {address.slice(0, 6)}...{address.slice(-4)}
                                         </span>
-                                    </button>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => disconnect()}
+                                    className="text-xs font-bold text-red-400 hover:text-red-300 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-500/10"
+                                >
+                                    DISCONNECT
+                                </button>
+                            </>
+                        ) : (
+                            <div className="w-full">
+                                <ConnectButton.Custom>
+                                    {({ openConnectModal }) => (
+                                        <button
+                                            onClick={openConnectModal}
+                                            className="w-full flex items-center justify-between group"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 group-hover:bg-purple-500/20 transition-colors">
+                                                    <Wallet size={16} className="text-purple-500" />
+                                                </div>
+                                                <div className="flex flex-col items-start">
+                                                    <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Status</span>
+                                                    <span className="text-sm font-medium text-zinc-300">Wallet Disconnected</span>
+                                                </div>
+                                            </div>
+                                            <span className="text-xs font-bold text-purple-400 group-hover:text-purple-300 transition-colors bg-purple-500/10 px-3 py-1.5 rounded-lg border border-purple-500/20">
+                                                CONNECT
+                                            </span>
+                                        </button>
+                                    )}
+                                </ConnectButton.Custom>
+                            </div>
+                        )}
+                    </div>
+
+                    {isConnected && (
+                        <>
+                            <button
+                                onClick={() => {
+                                    setError(""); // Clear error on retry
+                                    handleBridgeAndTip();
+                                }}
+                                disabled={loading || !amount || parseFloat(amount) <= 0}
+                                className="w-full p-4 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold text-lg shadow-lg shadow-purple-900/20 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                {loading ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                        Processing...
+                                    </>
+                                ) : (
+                                    "Bridge & Tip"
                                 )}
-                            </ConnectButton.Custom>
-                        </div>
+                            </button>
+                            {error && (
+                                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 text-red-400 text-xs animate-in fade-in slide-in-from-top-1">
+                                    <div className="bg-red-500/20 p-1 rounded-full shrink-0">
+                                        <span className="block w-1.5 h-1.5 bg-red-500 rounded-full" />
+                                    </div>
+                                    <p className="font-medium break-all">{error}</p>
+                                </div>
+
+                            )}
+                        </>
                     )}
                 </div>
-
-                {isConnected && (
-                    <>
-                        <button
-                            onClick={() => {
-                                setError(""); // Clear error on retry
-                                handleBridgeAndTip();
-                            }}
-                            disabled={loading || !amount || parseFloat(amount) <= 0}
-                            className="w-full p-4 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold text-lg shadow-lg shadow-purple-900/20 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                        >
-                            {loading ? (
-                                <>
-                                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                                    Processing...
-                                </>
-                            ) : (
-                                "Bridge & Tip"
-                            )}
-                        </button>
-                        {error && (
-                            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 text-red-400 text-xs animate-in fade-in slide-in-from-top-1">
-                                <div className="bg-red-500/20 p-1 rounded-full shrink-0">
-                                    <span className="block w-1.5 h-1.5 bg-red-500 rounded-full" />
-                                </div>
-                                <p className="font-medium break-all">{error}</p>
-                            </div>
-
-                        )}
-                    </>
-                )}
             </div>
         </div>
     );

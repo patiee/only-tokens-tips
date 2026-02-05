@@ -25,7 +25,7 @@ export default function Home() {
         </h1>
 
         <p className="text-lg sm:text-xl text-zinc-400 max-w-xl">
-          Receive ETH, USDC, and tokens directly from your viewers with 0% platform fees. Instant settlement.
+          Receive ETH, USDC, and tokens directly from your viewers. Instant settlement.
         </p>
 
         <div className="flex gap-4 items-center flex-col sm:flex-row mt-4">
@@ -43,7 +43,7 @@ export default function Home() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-16 w-full text-left">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-16 w-full text-left">
           <FeatureCard
             icon={<Wallet className="text-purple-400" />}
             title="Direct Wallet"
@@ -53,11 +53,6 @@ export default function Home() {
             icon={<Zap className="text-yellow-400" />}
             title="Instant Alerts"
             desc="Real-time OBS overlays for every donation."
-          />
-          <FeatureCard
-            icon={<div className="text-green-400 font-bold">$</div>}
-            title="1% Fee"
-            desc="Low 1% platform fee to support development."
           />
         </div>
       </main>
