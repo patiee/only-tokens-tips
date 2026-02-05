@@ -4,7 +4,7 @@ import { mainnet, base, optimism } from "wagmi/chains";
 import { http } from "wagmi";
 
 export const config = getDefaultConfig({
-    appName: "Only Tokens Tips",
+    appName: "Stream Tips",
     projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "YOUR_PROJECT_ID",
     chains: [mainnet, base, optimism],
     transports: {

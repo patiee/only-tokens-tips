@@ -273,7 +273,7 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus }: LifiTipProps)
                 fromAmount: parseEther(amount).toString(), // Send FULL amount
                 fromAddress: address,
                 // INTEGRATOR FEE PARAMS
-                integrator: process.env.NEXT_PUBLIC_LIFI_INTEGRATOR || "only-tokens-tips",
+                integrator: process.env.NEXT_PUBLIC_LIFI_INTEGRATOR || "stream-tips",
                 fee: "0.01", // 1%
             });
 

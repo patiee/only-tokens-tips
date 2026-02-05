@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Only Tokens Tips",
+  title: "Stream Tips",
   description: "Send crypto tips to your favorite streamers",
 };
 

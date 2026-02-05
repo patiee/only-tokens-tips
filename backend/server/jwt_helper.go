@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -22,6 +23,14 @@ func (s *Service) GetJWTSecret() []byte {
 	return []byte(s.config.JWTSecret)
 }
 
+func (s *Service) getJWTIssuer() string {
+	issuer := os.Getenv("JWT_ISSUER")
+	if issuer == "" {
+		return "only-tokens-tips"
+	}
+	return issuer
+}
+
 // GenerateSessionToken creates a standard access token for a user
 func (s *Service) GenerateSessionToken(user *model.User) (string, error) {
 	expiresAt := time.Now().Add(48 * time.Hour)
@@ -31,7 +40,7 @@ func (s *Service) GenerateSessionToken(user *model.User) (string, error) {
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "only-tokens-tips",
+			Issuer:    s.getJWTIssuer(),
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -99,7 +108,7 @@ func (s *Service) GenerateWalletToken(address string) (string, error) {
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "only-tokens-tips-wallet",
+			Issuer:    s.getJWTIssuer() + "-wallet",
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -168,7 +177,7 @@ func (s *Service) GenerateSignupToken(claims SignupClaims) (string, error) {
 	// Short expiry (e.g., 15 minutes) for completing signup
 	claims.ExpiresAt = jwt.NewNumericDate(time.Now().Add(15 * time.Minute))
 	claims.IssuedAt = jwt.NewNumericDate(time.Now())
-	claims.Issuer = "only-tokens-tips-signup"
+	claims.Issuer = s.getJWTIssuer() + "-signup"
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(s.GetJWTSecret())
