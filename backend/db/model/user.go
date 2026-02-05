@@ -18,4 +18,6 @@ type User struct {
 	WidgetUserColor    string    `json:"widget_user_color" gorm:"default:'#ffffff'"`
 	WidgetAmountColor  string    `json:"widget_amount_color" gorm:"default:'#22c55e'"`
 	WidgetMessageColor string    `json:"widget_message_color" gorm:"default:'#ffffff'"`
+	PreferredChainID   int       `json:"preferred_chain_id" gorm:"default:1"`
+	PreferredAsset     string    `json:"preferred_asset_address" gorm:"default:'0x0000000000000000000000000000000000000000'"`
 }

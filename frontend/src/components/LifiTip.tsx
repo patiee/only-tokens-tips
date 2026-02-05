@@ -4,17 +4,21 @@ import { useState, useEffect, useMemo } from "react";
 import { useAccount, useSendTransaction, useBalance, useSwitchChain, useReadContracts, useWriteContract, useConfig, useDisconnect } from "wagmi";
 import { useWalletAuth } from "@/hooks/useWalletAuth";
 import { readContract, waitForTransactionReceipt } from "wagmi/actions";
-import { parseEther, formatEther, erc20Abi, parseUnits } from "viem";
-import { mainnet, base, optimism } from "wagmi/chains";
+import { parseEther, formatEther, erc20Abi } from "viem";
+import { mainnet, base } from "wagmi/chains";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Check, ChevronDown, Wallet, Coins } from "lucide-react";
 
+import { evmChains } from "@/config/generated-chains";
+import { ChainConfig } from "@/config/generated-chains";
+
 // Mainnet Chain IDs
-const CHAINS = [
-    { id: mainnet.id, name: "Ethereum", logo: "https://cryptologos.cc/logos/ethereum-eth-logo.png" },
-    { id: base.id, name: "Base", logo: "https://avatars.githubusercontent.com/u/108554348?s=200&v=4" },
-    { id: optimism.id, name: "Optimism", logo: "https://cryptologos.cc/logos/optimism-ethereum-op-logo.png" },
-];
+const CHAINS = evmChains.map((c: ChainConfig) => ({
+    id: c.id,
+    name: c.name,
+    logo: c.logoURI || "https://cryptologos.cc/logos/ethereum-eth-logo.png",
+    nativeToken: c.nativeToken
+}));
 
 interface Token {
     symbol: string;
@@ -43,9 +47,11 @@ interface LifiTipProps {
         token: string;
     }) => void;
     onStatus: (status: string) => void;
+    preferredChainId?: number;
+    preferredAssetAddress?: string;
 }
 
-export function LifiTip({ recipientAddress, onSuccess, onStatus }: LifiTipProps) {
+export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainId, preferredAssetAddress }: LifiTipProps) {
     const { address, chain, isConnected } = useAccount();
     const { switchChainAsync } = useSwitchChain();
     const { disconnect } = useDisconnect();
@@ -59,7 +65,7 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus }: LifiTipProps)
     const [error, setError] = useState("");
 
     // Selectors
-    const [selectedChainId, setSelectedChainId] = useState<number>(mainnet.id);
+    const [selectedChainId, setSelectedChainId] = useState<number>(preferredChainId || mainnet.id);
     const [chainDropdownOpen, setChainDropdownOpen] = useState(false);
     const [assetDropdownOpen, setAssetDropdownOpen] = useState(false);
     const [tokens, setTokens] = useState<Token[]>([]);
@@ -74,20 +80,17 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus }: LifiTipProps)
 
     const [loading, setLoading] = useState(false);
 
-    // Initialize tokens with Native Asset for selected chain
     useEffect(() => {
         const fetchTokens = async () => {
             // 1. Native Token (Address Zero)
+            const targetChain = CHAINS.find((c: { id: number }) => c.id === selectedChainId);
             const nativeToken: Token = {
-                symbol: "ETH", // Default, will update if chain has diff native
-                name: "Native Token",
+                symbol: targetChain?.nativeToken?.symbol || "ETH",
+                name: targetChain?.nativeToken?.name || "Native Token",
                 address: "0x0000000000000000000000000000000000000000",
-                decimals: 18,
-                logo: "https://cryptologos.cc/logos/ethereum-eth-logo.png"
+                decimals: targetChain?.nativeToken?.decimals || 18,
+                logo: targetChain?.nativeToken?.logoURI || "https://cryptologos.cc/logos/ethereum-eth-logo.png"
             };
-
-            // Attempt to get more accurate Native info from Wagmi chain definition if available
-            const targetChain = CHAINS.find(c => c.id === selectedChainId);
 
             let fetchedTokens: Token[] = [nativeToken];
 
@@ -110,17 +113,27 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus }: LifiTipProps)
                         fetchedTokens = [...fetchedTokens, ...nonNative];
                     }
                 }
-            } catch (e) {
+            } catch (e: unknown) {
                 console.log("Failed to fetch LI.FI tokens, using native only", e);
             }
 
             setTokens(fetchedTokens);
             // Default to native if current selection not valid?
-            setSelectedAsset(prev => fetchedTokens.find(t => t.symbol === prev?.symbol) || fetchedTokens[0]);
+            // If preferredAssetAddress is provided and found, select it. Otherwise default to native (fetchedTokens[0])
+            if (preferredAssetAddress && selectedChainId === preferredChainId) {
+                const preferred = fetchedTokens.find(t => t.address.toLowerCase() === preferredAssetAddress.toLowerCase());
+                if (preferred) {
+                    setSelectedAsset(preferred);
+                } else {
+                    setSelectedAsset(fetchedTokens[0]);
+                }
+            } else {
+                setSelectedAsset(prev => fetchedTokens.find(t => t.symbol === prev?.symbol) || fetchedTokens[0]);
+            }
         };
 
         fetchTokens();
-    }, [selectedChainId]);
+    }, [selectedChainId, preferredAssetAddress, preferredChainId]);
 
     // Fetch Balance for selected asset on selected chain
     const { data: balanceData } = useBalance({
@@ -359,11 +372,11 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus }: LifiTipProps)
                 token
             });
 
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error(e);
             // Only show detailed error locally, reset global status
             onStatus("");
-            setError(e.message || "Transaction failed");
+            setError((e as Error).message || "Transaction failed");
         } finally {
             setLoading(false);
         }
@@ -389,7 +402,7 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus }: LifiTipProps)
                         </button>
 
                         {chainDropdownOpen && (
-                            <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                            <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-60 overflow-y-auto">
                                 {CHAINS.map(c => (
                                     <button
                                         key={c.id}

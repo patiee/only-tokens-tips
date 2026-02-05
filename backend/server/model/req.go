@@ -15,10 +15,12 @@ type TipRequest struct {
 }
 
 type SignupRequest struct {
-	Username    string `json:"username"`
-	SignupToken string `json:"signup_token"` // JWT containing Provider, ProviderID, Email, Avatar
-	EthAddress  string `json:"eth_address"`
-	MainWallet  bool   `json:"main_wallet"`
+	Username              string `json:"username"`
+	SignupToken           string `json:"signup_token"`
+	EthAddress            string `json:"eth_address"`
+	MainWallet            bool   `json:"main_wallet"`
+	PreferredChainID      int    `json:"preferred_chain_id"`
+	PreferredAssetAddress string `json:"preferred_asset_address"`
 }
 
 type UpdateWidgetRequest struct {

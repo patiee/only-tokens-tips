@@ -13,6 +13,8 @@ interface PublicUserProfile {
     username: string;
     eth_address: string;
     avatar_url: string;
+    preferred_chain_id?: number;
+    preferred_asset_address?: string;
 }
 
 export default function TipPage() {
@@ -140,6 +142,8 @@ export default function TipPage() {
                             recipientAddress={user.eth_address}
                             onSuccess={handleSuccess}
                             onStatus={setStatus}
+                            preferredChainId={user.preferred_chain_id}
+                            preferredAssetAddress={user.preferred_asset_address}
                         />
                     </ErrorBoundary>
                 </div>

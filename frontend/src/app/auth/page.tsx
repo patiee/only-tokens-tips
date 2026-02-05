@@ -5,8 +5,9 @@ import { useEffect, useState, Suspense } from "react";
 import { jwtDecode } from "jwt-decode";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useSignMessage } from "wagmi";
-import { Twitch, Monitor, Chrome, ArrowLeft } from "lucide-react";
+import { Twitch, Monitor, Chrome, ArrowLeft, ChevronDown, Check, Coins } from "lucide-react";
 import Link from "next/link";
+import { evmChains, ChainConfig } from "@/config/generated-chains";
 
 export default function AuthPage() {
     return (
@@ -200,7 +201,7 @@ function AuthContent() {
     );
 }
 
-function WalletLoginButton({ setStep, setFormData }: { setStep: any, setFormData: any }) {
+function WalletLoginButton({ setStep, setFormData }: { setStep: (step: number) => void, setFormData: React.Dispatch<React.SetStateAction<any>> }) {
     const { address, isConnected } = useAccount();
     const { signMessageAsync } = useSignMessage();
     const router = useRouter();
@@ -271,10 +272,58 @@ function WalletLoginButton({ setStep, setFormData }: { setStep: any, setFormData
 }
 
 
-function WalletConnectStep({ formData, onBack, onError }: { formData: any, onBack: () => void, onError: (msg: string) => void }) {
+interface FormData {
+    username: string;
+    signup_token: string;
+}
+
+function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, onBack: () => void, onError: (msg: string) => void }) {
     const { address, isConnected } = useAccount();
     const router = useRouter();
     const [loading, setLoading] = useState(false);
+
+    // Preferences
+    const [selectedChainId, setSelectedChainId] = useState<number>(evmChains[0]?.id || 1);
+    const [selectedAsset, setSelectedAsset] = useState<{ symbol: string; address: string; logo?: string; name?: string } | null>(null);
+    const [chainDropdownOpen, setChainDropdownOpen] = useState(false);
+    const [assetDropdownOpen, setAssetDropdownOpen] = useState(false);
+    const [tokens, setTokens] = useState<any[]>([]);
+
+    // Initialize Default Asset (Native) when chain changes
+    useEffect(() => {
+        const chain = evmChains.find(c => c.id === selectedChainId);
+        if (chain) {
+            const native = {
+                symbol: chain.nativeToken.symbol,
+                address: chain.nativeToken.address, // Usually 0x00..00
+                logo: chain.nativeToken.logoURI,
+                name: chain.nativeToken.name,
+                decimals: chain.nativeToken.decimals
+            };
+            setTokens([native]);
+            setSelectedAsset(native);
+
+            // Optional: Fetch more tokens from LiFi
+            fetch(`https://li.quest/v1/tokens?chains=${selectedChainId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.tokens && data.tokens[selectedChainId]) {
+                        const extraTokens = data.tokens[selectedChainId]
+                            .filter((t: { address: string }) => t.address !== "0x0000000000000000000000000000000000000000")
+                            .map((t: { symbol: string, name: string, address: string, logoURI: string, decimals: number }) => ({
+                                symbol: t.symbol,
+                                name: t.name,
+                                address: t.address,
+                                logo: t.logoURI,
+                                decimals: t.decimals
+                            }))
+                            .slice(0, 20); // Limit to top 20 to avoid lag
+                        setTokens(prev => [...prev, ...extraTokens]);
+                    }
+                })
+                .catch(err => console.error("Failed to fetch tokens", err));
+        }
+    }, [selectedChainId]);
 
     const handleFinish = async () => {
         setLoading(true);
@@ -287,6 +336,9 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: any, onBac
                     signup_token: formData.signup_token,
                     eth_address: address || "",
                     main_wallet: !!address,
+                    // New Preferences
+                    preferred_chain_id: selectedChainId,
+                    preferred_asset_address: selectedAsset?.address || "0x0000000000000000000000000000000000000000"
                 })
             });
 
@@ -309,6 +361,8 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: any, onBac
         }
     };
 
+    const selectedChain = evmChains.find(c => c.id === selectedChainId);
+
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 text-center">
             <div>
@@ -321,8 +375,81 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: any, onBac
             </div>
 
             {isConnected && (
-                <div className="p-3 bg-zinc-950/50 border border-zinc-800 rounded-xl break-all text-xs font-mono text-zinc-400">
-                    <span className="text-zinc-500">Connected:</span> {address}
+                <div className="space-y-4 text-left">
+                    <div className="p-3 bg-zinc-950/50 border border-zinc-800 rounded-xl break-all text-xs font-mono text-zinc-400 text-center">
+                        <span className="text-zinc-500">Connected:</span> {address?.slice(0, 6)}...{address?.slice(-4)}
+                    </div>
+
+                    <div className="space-y-3">
+                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block">Preferred Network for Tips</label>
+
+                        {/* Chain Selector */}
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setChainDropdownOpen(!chainDropdownOpen)}
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none flex items-center justify-between"
+                            >
+                                <div className="flex items-center gap-2">
+                                    {selectedChain?.logoURI && <img src={selectedChain.logoURI} alt={selectedChain.name} className="w-5 h-5 rounded-full" />}
+                                    <span>{selectedChain?.name || "Select Chain"}</span>
+                                </div>
+                                <ChevronDown size={16} className={`text-zinc-500 ${chainDropdownOpen ? "rotate-180" : ""}`} />
+                            </button>
+
+                            {chainDropdownOpen && (
+                                <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl z-20 max-h-60 overflow-y-auto">
+                                    {evmChains.map(c => (
+                                        <button
+                                            key={c.id}
+                                            type="button"
+                                            onClick={() => { setSelectedChainId(c.id); setChainDropdownOpen(false); }}
+                                            className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-2"
+                                        >
+                                            <img src={c.logoURI} alt={c.name} className="w-5 h-5 rounded-full" />
+                                            <span>{c.name}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            {chainDropdownOpen && <div className="fixed inset-0 z-10" onClick={() => setChainDropdownOpen(false)} />}
+                        </div>
+
+                        {/* Asset Selector */}
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setAssetDropdownOpen(!assetDropdownOpen)}
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none flex items-center justify-between"
+                            >
+                                <div className="flex items-center gap-2">
+                                    {selectedAsset?.logo ? <img src={selectedAsset.logo} className="w-5 h-5 rounded-full" /> : <Coins size={16} className="text-zinc-500" />}
+                                    <span>{selectedAsset?.symbol || "Select Asset"}</span>
+                                </div>
+                                <ChevronDown size={16} className={`text-zinc-500 ${assetDropdownOpen ? "rotate-180" : ""}`} />
+                            </button>
+
+                            {assetDropdownOpen && (
+                                <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl z-20 max-h-60 overflow-y-auto">
+                                    {tokens.map((t, idx) => (
+                                        <button
+                                            key={`${t.symbol}-${idx}`}
+                                            type="button"
+                                            onClick={() => { setSelectedAsset(t); setAssetDropdownOpen(false); }}
+                                            className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-2"
+                                        >
+                                            {t.logo ? <img src={t.logo} className="w-5 h-5 rounded-full" /> : <Coins size={16} />}
+                                            <div className="flex flex-col text-left">
+                                                <span className="text-sm font-medium">{t.symbol}</span>
+                                                <span className="text-xs text-zinc-500">{t.name}</span>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            {assetDropdownOpen && <div className="fixed inset-0 z-10" onClick={() => setAssetDropdownOpen(false)} />}
+                        </div>
+                    </div>
                 </div>
             )}
 

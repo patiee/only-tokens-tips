@@ -228,6 +228,8 @@ func (s *Server) HandleSignup(c *gin.Context) {
 		claims.AvatarURL,
 		ethAddr,
 		req.MainWallet,
+		req.PreferredChainID,
+		req.PreferredAssetAddress,
 	)
 
 	if err != nil {
@@ -283,14 +285,16 @@ func (s *Server) HandleGetUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"username":             user.Username,
-		"eth_address":          user.EthAddress,
-		"widget_tts":           user.WidgetTTS,
-		"widget_bg_color":      user.WidgetBgColor,
-		"widget_user_color":    user.WidgetUserColor,
-		"widget_amount_color":  user.WidgetAmountColor,
-		"widget_message_color": user.WidgetMessageColor,
-		"avatar_url":           user.AvatarURL,
+		"username":                user.Username,
+		"eth_address":             user.EthAddress,
+		"widget_tts":              user.WidgetTTS,
+		"widget_bg_color":         user.WidgetBgColor,
+		"widget_user_color":       user.WidgetUserColor,
+		"widget_amount_color":     user.WidgetAmountColor,
+		"widget_message_color":    user.WidgetMessageColor,
+		"avatar_url":              user.AvatarURL,
+		"preferred_chain_id":      user.PreferredChainID,
+		"preferred_asset_address": user.PreferredAsset,
 	})
 }
 
@@ -506,13 +510,15 @@ func (s *Server) HandleGetWidgetConfig(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"username":             user.Username,
-		"eth_address":          user.EthAddress,
-		"widget_tts":           user.WidgetTTS,
-		"widget_bg_color":      user.WidgetBgColor,
-		"widget_user_color":    user.WidgetUserColor,
-		"widget_amount_color":  user.WidgetAmountColor,
-		"widget_message_color": user.WidgetMessageColor,
-		"avatar_url":           user.AvatarURL,
+		"username":                user.Username,
+		"eth_address":             user.EthAddress,
+		"widget_tts":              user.WidgetTTS,
+		"widget_bg_color":         user.WidgetBgColor,
+		"widget_user_color":       user.WidgetUserColor,
+		"widget_amount_color":     user.WidgetAmountColor,
+		"widget_message_color":    user.WidgetMessageColor,
+		"avatar_url":              user.AvatarURL,
+		"preferred_chain_id":      user.PreferredChainID,
+		"preferred_asset_address": user.PreferredAsset,
 	})
 }

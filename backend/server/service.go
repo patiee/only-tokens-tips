@@ -144,16 +144,18 @@ func (s *Service) UpdateUserWallet(userID uint, ethAddress string) error {
 	return s.db.UpdateUserWallet(userID, ethAddress)
 }
 
-func (s *Service) RegisterUser(username, provider, providerID, email, avatar, ethAddress string, mainWallet bool) (*dbmodel.User, string, error) {
+func (s *Service) RegisterUser(username, provider, providerID, email, avatar, ethAddress string, mainWallet bool, preferredChainID int, preferredAssetAddress string) (*dbmodel.User, string, error) {
 	user := &dbmodel.User{
-		Username:   username,
-		Provider:   provider,
-		ProviderID: providerID,
-		Email:      email,
-		AvatarURL:  avatar,
-		EthAddress: ethAddress,
-		MainWallet: mainWallet,
-		CreatedAt:  time.Now(),
+		Username:         username,
+		Provider:         provider,
+		ProviderID:       providerID,
+		Email:            email,
+		AvatarURL:        avatar,
+		EthAddress:       ethAddress,
+		MainWallet:       mainWallet,
+		CreatedAt:        time.Now(),
+		PreferredChainID: preferredChainID,
+		PreferredAsset:   preferredAssetAddress,
 	}
 
 	if err := s.CreateUser(user); err != nil {
