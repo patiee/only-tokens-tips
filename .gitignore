@@ -1,9 +1,1 @@
-.env
 .DS_Store
-node_modules/
-.next/
-dist/
-bin/
-go.sum
-certs
-tmp*
