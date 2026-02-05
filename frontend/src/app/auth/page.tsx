@@ -393,6 +393,11 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, 
                 localStorage.setItem("user_token", data.token);
                 router.push("/me");
             } else {
+                if (res.status === 401) {
+                    alert("Session expired. Please login again.");
+                    router.push("/auth");
+                    return;
+                }
                 if (res.status === 409 || data.error?.includes("already taken") || data.error?.includes("Username")) {
                     onError("Username already taken or invalid");
                 } else {
@@ -532,16 +537,73 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, 
             </div>
 
             <div className="flex justify-center py-2">
-                <ConnectButton showBalance={false} chainStatus="none" />
+                <ConnectButton.Custom>
+                    {({
+                        account,
+                        chain,
+                        openAccountModal,
+                        openChainModal,
+                        openConnectModal,
+                        authenticationStatus,
+                        mounted,
+                    }) => {
+                        const ready = mounted && authenticationStatus !== 'loading';
+                        const connected =
+                            ready &&
+                            account &&
+                            chain &&
+                            (!authenticationStatus ||
+                                authenticationStatus === 'authenticated');
+
+                        return (
+                            <div
+                                {...(!ready && {
+                                    'aria-hidden': true,
+                                    'style': {
+                                        opacity: 0,
+                                        pointerEvents: 'none',
+                                        userSelect: 'none',
+                                    },
+                                })}
+                                className="w-full"
+                            >
+                                {(() => {
+                                    if (!connected) {
+                                        return (
+                                            <button onClick={openConnectModal} type="button" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg shadow-blue-900/20">
+                                                Connect Wallet
+                                            </button>
+                                        );
+                                    }
+
+                                    if (chain.unsupported) {
+                                        return (
+                                            <button onClick={openChainModal} type="button" className="w-full bg-red-500 hover:bg-red-400 text-white font-bold py-3 px-4 rounded-xl transition-all">
+                                                Wrong network
+                                            </button>
+                                        );
+                                    }
+
+                                    return (
+                                        <button onClick={openAccountModal} type="button" className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-center gap-3 transition-all hover:bg-zinc-900">
+                                            {account.ensAvatar ? (
+                                                <img src={account.ensAvatar} alt="ENS Avatar" className="w-6 h-6 rounded-full" />
+                                            ) : (
+                                                <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-[10px] font-bold">
+                                                    {account.displayName ? account.displayName[0] : "W"}
+                                                </div>
+                                            )}
+                                            <span className="font-medium text-lg text-xs break-all">{account.address}</span>
+                                            <ChevronDown size={16} className="text-zinc-500" />
+                                        </button>
+                                    );
+                                })()}
+                            </div>
+                        );
+                    }}
+                </ConnectButton.Custom>
             </div>
 
-            {isConnected && (
-                <div className="space-y-4 text-left">
-                    <div className="p-3 bg-zinc-950/50 border border-zinc-800 rounded-xl break-all text-xs font-mono text-zinc-400 text-center">
-                        <span className="text-zinc-500">Connected:</span> {address}
-                    </div>
-                </div>
-            )}
 
             <div className="space-y-3">
                 <button
