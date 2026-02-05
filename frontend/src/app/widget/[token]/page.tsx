@@ -287,8 +287,7 @@ export default function WidgetPage() {
             className="min-h-screen bg-transparent flex items-end justify-center p-8 overflow-hidden font-sans relative"
             onClick={() => setInteractionNeeded(false)} // Any click enables checks
         >
-            {/* Connection Status Indicator (Hidden in OBS usually, but good for debug) */}
-            <div className={`fixed top-4 right-4 w-3 h-3 rounded-full ${connected ? "bg-green-500" : "bg-red-500 animate-pulse"} shadow-md border border-white/20`} title={connected ? "Connected" : "Disconnected"} />
+
 
             {/* Interaction Overlay for Audio Context */}
             {interactionNeeded && config.tts_enabled && (
