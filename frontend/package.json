@@ -4,8 +4,9 @@
   "license": "Proprietary",
   "private": true,
   "scripts": {
+    "fetch-networks": "node scripts/generate-chains.js",
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run fetch-networks && next build",
     "start": "next start",
     "lint": "eslint"
   },

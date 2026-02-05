@@ -297,21 +297,9 @@ func (s *Service) GetTips(username string, limit int, cursor uint) ([]model.TipR
 // verifyTransaction checks the tx status, sender, and amount on-chain
 func (s *Service) verifyTransaction(chainID string, txHash string, expectedSender string, expectedAmount string, asset string) (bool, error) {
 	// Map ChainID to RPC
-	var rpcURL string
-	switch chainID {
-	case "1": // Ethereum Mainnet
-		rpcURL = "https://rpc.ankr.com/eth"
-	case "11155111": // Sepolia
-		rpcURL = "https://rpc.ankr.com/eth_sepolia"
-	case "8453": // Base
-		rpcURL = "https://mainnet.base.org"
-	case "84532": // Base Sepolia
-		rpcURL = "https://sepolia.base.org"
-	case "10": // Optimism
-		rpcURL = "https://mainnet.optimism.io"
-	case "42161": // Arbitrum
-		rpcURL = "https://arb1.arbitrum.io/rpc"
-	default:
+	// Map ChainID to RPC
+	rpcURL, ok := ChainRPCs[chainID]
+	if !ok {
 		if chainID == "31337" {
 			return true, nil
 		}
