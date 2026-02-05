@@ -76,8 +76,13 @@ func (d *Database) GetUserByWidgetToken(token string) (*model.User, error) {
 	return &user, nil
 }
 
-func (d *Database) UpdateUserWallet(userID uint, ethAddress string) error {
-	return d.conn.Model(&model.User{}).Where("id = ?", userID).Update("eth_address", ethAddress).Error
+func (d *Database) UpdateUserWallet(userID uint, ethAddress string, chainID int, assetAddress string) error {
+	updates := map[string]interface{}{
+		"eth_address":        ethAddress,
+		"preferred_chain_id": chainID,
+		"preferred_asset":    assetAddress,
+	}
+	return d.conn.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
 }
 
 func (d *Database) UpdateUserProfile(userID uint, username, ethAddress string, mainWallet bool) error {

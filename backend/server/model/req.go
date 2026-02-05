@@ -32,5 +32,7 @@ type UpdateWidgetRequest struct {
 }
 
 type UpdateWalletRequest struct {
-	EthAddress string `json:"eth_address" binding:"required"`
+	EthAddress            string `json:"eth_address" binding:"required"`
+	PreferredChainID      int    `json:"preferred_chain_id"`
+	PreferredAssetAddress string `json:"preferred_asset_address"`
 }

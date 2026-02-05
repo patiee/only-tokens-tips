@@ -318,15 +318,20 @@ func (s *Server) HandleUpdateWallet(c *gin.Context) {
 		return
 	}
 
-	err = s.service.UpdateUserWallet(claims.UserID, req.EthAddress)
+	err = s.service.UpdateUserWallet(claims.UserID, req.EthAddress, req.PreferredChainID, req.PreferredAssetAddress)
 	if err != nil {
 		s.logger.Printf("Failed to update wallet: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update wallet"})
 		return
 	}
 
-	s.logger.Printf("User %s updated wallet to %s", claims.Username, req.EthAddress)
-	c.JSON(http.StatusOK, gin.H{"message": "Wallet updated", "eth_address": req.EthAddress})
+	s.logger.Printf("User %s updated wallet to %s (Chain: %d, Asset: %s)", claims.Username, req.EthAddress, req.PreferredChainID, req.PreferredAssetAddress)
+	c.JSON(http.StatusOK, gin.H{
+		"message":                 "Wallet updated",
+		"eth_address":             req.EthAddress,
+		"preferred_chain_id":      req.PreferredChainID,
+		"preferred_asset_address": req.PreferredAssetAddress,
+	})
 }
 
 func (s *Server) HandleUpdateWidget(c *gin.Context) {

@@ -140,8 +140,8 @@ func (s *Service) GetUserByUsername(username string) (*dbmodel.User, error) {
 	return s.db.GetUserByUsername(username)
 }
 
-func (s *Service) UpdateUserWallet(userID uint, ethAddress string) error {
-	return s.db.UpdateUserWallet(userID, ethAddress)
+func (s *Service) UpdateUserWallet(userID uint, ethAddress string, chainID int, assetAddress string) error {
+	return s.db.UpdateUserWallet(userID, ethAddress, chainID, assetAddress)
 }
 
 func (s *Service) RegisterUser(username, provider, providerID, email, avatar, ethAddress string, mainWallet bool, preferredChainID int, preferredAssetAddress string) (*dbmodel.User, string, error) {
