@@ -24,11 +24,12 @@ var (
 )
 
 type Service struct {
-	db        *db.Database
-	config    Config
-	logger    *log.Logger
-	clients   map[*websocket.Conn]bool
-	clientsMu sync.Mutex
+	db          *db.Database
+	config      Config
+	logger      *log.Logger
+	clients     map[uint]map[*websocket.Conn]bool // UserID -> Set of Conns
+	connsToUser map[*websocket.Conn]uint          // Conn -> UserID (reverse lookup)
+	clientsMu   sync.Mutex
 
 	// Security
 	securityMu sync.Mutex
@@ -38,33 +39,51 @@ type Service struct {
 
 func NewService(db *db.Database, config Config, logger *log.Logger) *Service {
 	return &Service{
-		db:         db,
-		config:     config,
-		logger:     logger,
-		clients:    make(map[*websocket.Conn]bool),
-		lastTipReq: make(map[string]time.Time),
-		strikes:    make(map[string]int),
+		db:          db,
+		config:      config,
+		logger:      logger,
+		clients:     make(map[uint]map[*websocket.Conn]bool),
+		connsToUser: make(map[*websocket.Conn]uint),
+		lastTipReq:  make(map[string]time.Time),
+		strikes:     make(map[string]int),
 	}
 }
 
 // Logic Methods
 
-func (s *Service) RegisterClient(conn *websocket.Conn) {
+func (s *Service) RegisterClient(conn *websocket.Conn, userID uint) {
 	s.clientsMu.Lock()
 	defer s.clientsMu.Unlock()
-	s.clients[conn] = true
+	if s.clients[userID] == nil {
+		s.clients[userID] = make(map[*websocket.Conn]bool)
+	}
+	s.clients[userID][conn] = true
+	s.connsToUser[conn] = userID
 }
 
 func (s *Service) UnregisterClient(conn *websocket.Conn) {
 	s.clientsMu.Lock()
 	defer s.clientsMu.Unlock()
-	if _, ok := s.clients[conn]; ok {
-		delete(s.clients, conn)
+	if userID, ok := s.connsToUser[conn]; ok {
+		if _, exists := s.clients[userID][conn]; exists {
+			delete(s.clients[userID], conn)
+			if len(s.clients[userID]) == 0 {
+				delete(s.clients, userID)
+			}
+		}
+		delete(s.connsToUser, conn)
 		conn.Close()
 	}
 }
 
 func (s *Service) NotifyWidgets(tip model.TipRequest) {
+	// Find UserID for Streamer
+	user, err := s.db.GetUserByUsername(tip.StreamerID)
+	if err != nil {
+		s.logger.Printf("Failed to find streamer %s: %v", tip.StreamerID, err)
+		return
+	}
+
 	notification := model.TipNotification{
 		Type:       "TIP",
 		StreamerID: tip.StreamerID,
@@ -76,12 +95,15 @@ func (s *Service) NotifyWidgets(tip model.TipRequest) {
 	s.clientsMu.Lock()
 	defer s.clientsMu.Unlock()
 
-	for client := range s.clients {
-		err := client.WriteJSON(notification)
-		if err != nil {
-			s.logger.Printf("WS write error: %v", err)
-			client.Close()
-			delete(s.clients, client)
+	if conns, ok := s.clients[user.ID]; ok {
+		for client := range conns {
+			err := client.WriteJSON(notification)
+			if err != nil {
+				s.logger.Printf("WS write error: %v", err)
+				client.Close()
+				delete(conns, client)
+				delete(s.connsToUser, client)
+			}
 		}
 	}
 }
@@ -120,6 +142,31 @@ func (s *Service) GetUserByUsername(username string) (*dbmodel.User, error) {
 
 func (s *Service) UpdateUserWallet(userID uint, ethAddress string) error {
 	return s.db.UpdateUserWallet(userID, ethAddress)
+}
+
+func (s *Service) RegisterUser(username, provider, providerID, email, avatar, ethAddress string, mainWallet bool) (*dbmodel.User, string, error) {
+	user := &dbmodel.User{
+		Username:   username,
+		Provider:   provider,
+		ProviderID: providerID,
+		Email:      email,
+		AvatarURL:  avatar,
+		EthAddress: ethAddress,
+		MainWallet: mainWallet,
+		CreatedAt:  time.Now(),
+	}
+
+	if err := s.CreateUser(user); err != nil {
+		return nil, "", err
+	}
+
+	// Generate Session Token
+	token, err := s.GenerateSessionToken(user)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return user, token, nil
 }
 
 func (s *Service) UpdateWidgetConfig(userID uint, req model.UpdateWidgetRequest) error {

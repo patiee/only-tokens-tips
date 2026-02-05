@@ -30,13 +30,13 @@ export default function Home() {
 
         <div className="flex gap-4 items-center flex-col sm:flex-row mt-4">
           <Link
-            href="/signup"
+            href="/auth"
             className="rounded-full bg-white text-black px-8 py-3.5 font-semibold text-lg hover:bg-zinc-200 transition-all flex items-center gap-2"
           >
             Start Receiving Tips <ArrowRight size={20} />
           </Link>
           <Link
-            href="/login"
+            href="/auth"
             className="rounded-full border border-zinc-700 bg-zinc-900/50 px-8 py-3.5 font-medium text-white hover:bg-zinc-800 transition-all"
           >
             Log In

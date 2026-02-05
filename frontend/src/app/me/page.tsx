@@ -11,6 +11,7 @@ export type UserProfile = {
     main_wallet: boolean;
     name?: string;
     avatar_url?: string;
+    widget_token?: string;
 };
 
 function DashboardContent() {
@@ -37,7 +38,7 @@ function DashboardContent() {
 
         if (!token) {
             // Keep redirect for missing token, but maybe add delay?
-            router.push("/signup");
+            router.push("/auth");
             return;
         }
 
@@ -95,7 +96,7 @@ function DashboardContent() {
 
     const copyToClipboard = () => {
         if (!profile) return;
-        const url = `${window.location.origin}/widget/${profile.username}`;
+        const url = `${window.location.origin}/widget/${profile.widget_token || profile.username}`;
         navigator.clipboard.writeText(url);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
@@ -121,7 +122,7 @@ function DashboardContent() {
                         Test Connection
                     </a>
                     <button
-                        onClick={() => { localStorage.removeItem("user_token"); router.push("/login"); }}
+                        onClick={() => { localStorage.removeItem("user_token"); router.push("/auth"); }}
                         className="px-4 py-2 bg-red-600 rounded hover:bg-red-500 text-sm font-bold"
                     >
                         Log Out
@@ -210,7 +211,7 @@ function DashboardContent() {
 
                             <div className="flex gap-2">
                                 <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-xs text-zinc-500 font-mono truncate flex-1">
-                                    {typeof window !== 'undefined' ? `${window.location.origin}/widget/${profile.username}` : `.../widget/${profile.username}`}
+                                    {typeof window !== 'undefined' ? `${window.location.origin}/widget/${profile.widget_token || profile.username}` : `.../widget/${profile.widget_token || profile.username}`}
                                 </div>
                                 <button
                                     onClick={copyToClipboard}

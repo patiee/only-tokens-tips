@@ -12,6 +12,7 @@ type User struct {
 	AvatarURL          string    `json:"avatar_url"`
 	EthAddress         string    `json:"eth_address"`
 	MainWallet         bool      `json:"main_wallet"`
+	WidgetToken        string    `json:"widget_token" gorm:"uniqueIndex"` // Private UUID for widget URL
 	WidgetTTS          bool      `json:"widget_tts" gorm:"default:false"`
 	WidgetBgColor      string    `json:"widget_bg_color" gorm:"default:'#000000'"`
 	WidgetUserColor    string    `json:"widget_user_color" gorm:"default:'#ffffff'"`

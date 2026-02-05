@@ -52,6 +52,13 @@ export function useWalletAuth() {
             }
 
             const data = await res.json();
+
+            // Handle Signup Needed
+            if (data.status === "signup_needed") {
+                window.location.href = `/auth?step=2&signup_token=${data.signup_token}`;
+                return null;
+            }
+
             const token = data.token;
 
             // 5. Save Token

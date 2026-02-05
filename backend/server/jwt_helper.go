@@ -152,3 +152,44 @@ func (s *Service) ValidateWalletToken(tokenString string) (*WalletClaims, error)
 
 	return claims, nil
 }
+
+// Signup Token Logic
+
+type SignupClaims struct {
+	Provider   string `json:"provider"`
+	ProviderID string `json:"provider_id"`
+	Email      string `json:"email,omitempty"`
+	AvatarURL  string `json:"avatar_url,omitempty"`
+	EthAddress string `json:"eth_address,omitempty"`
+	jwt.RegisteredClaims
+}
+
+func (s *Service) GenerateSignupToken(claims SignupClaims) (string, error) {
+	// Short expiry (e.g., 15 minutes) for completing signup
+	claims.ExpiresAt = jwt.NewNumericDate(time.Now().Add(15 * time.Minute))
+	claims.IssuedAt = jwt.NewNumericDate(time.Now())
+	claims.Issuer = "only-tokens-tips-signup"
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(s.GetJWTSecret())
+}
+
+func (s *Service) ValidateSignupToken(tokenString string) (*SignupClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &SignupClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return s.GetJWTSecret(), nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	claims, ok := token.Claims.(*SignupClaims)
+	if !ok || !token.Valid {
+		return nil, fmt.Errorf("invalid signup token")
+	}
+
+	return claims, nil
+}

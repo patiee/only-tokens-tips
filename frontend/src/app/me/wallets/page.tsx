@@ -28,7 +28,7 @@ function WalletsContent() {
     useEffect(() => {
         const token = localStorage.getItem("user_token");
         if (!token) {
-            router.push("/signup");
+            router.push("/auth");
             return;
         }
 

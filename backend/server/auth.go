@@ -11,7 +11,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
-	dbmodel "github.com/patiee/backend/db/model"
 	"github.com/patiee/backend/server/model"
 	"golang.org/x/oauth2"
 )
@@ -67,14 +66,14 @@ func (s *Service) HandleOAuthCallback(c *gin.Context) {
 	token, err := config.Exchange(context.Background(), code)
 	if err != nil {
 		s.logger.Printf("OAuth exchange error: %v", err)
-		c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/signup?error=oauth_failed")
+		c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/auth?error=oauth_failed")
 		return
 	}
 
 	userProfile, err := s.fetchUserProfile(provider, token.AccessToken, s.logger)
 	if err != nil {
 		s.logger.Printf("Failed to fetch profile: %v", err)
-		c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/signup?error=profile_failed")
+		c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/auth?error=profile_failed")
 		return
 	}
 
@@ -82,49 +81,34 @@ func (s *Service) HandleOAuthCallback(c *gin.Context) {
 	existingUser, err := s.GetUserByProviderID(provider, userProfile.ID)
 
 	// Create/Update Logic
+	// Create/Update Logic
 	if err == nil {
 		// User exists -> Login
 		token, err := s.GenerateSessionToken(existingUser)
 		if err != nil {
 			s.logger.Printf("Failed to generate session token: %v", err)
-			c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/signup?error=token_err")
+			c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/auth?error=token_err")
 			return
 		}
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://localhost:3000/me?token=%s", token))
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://localhost:3000/auth?token=%s", token))
 	} else {
-		// New User -> Create immediately with temp username
-		// We'll let them change username in step 2
-		tempUsername := fmt.Sprintf("user_%s_%s", provider, userProfile.ID)
-		if len(tempUsername) > 20 {
-			tempUsername = tempUsername[:20] // Truncate if too long
-		}
-
-		newUser := dbmodel.User{
-			Username:   tempUsername,
+		// New User -> Redirect to Signup Step 2
+		signupClaims := SignupClaims{
 			Provider:   provider,
 			ProviderID: userProfile.ID,
 			Email:      userProfile.Email,
 			AvatarURL:  userProfile.Avatar,
-			CreatedAt:  time.Now(),
 		}
 
-		// Create in DB
-		if err := s.CreateUser(&newUser); err != nil {
-			s.logger.Printf("Failed to auto-create user: %v", err)
-			c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/signup?error=create_failed")
-			return
-		}
-
-		// Generate Session Token
-		token, err := s.GenerateSessionToken(&newUser)
+		signupToken, err := s.GenerateSignupToken(signupClaims)
 		if err != nil {
-			s.logger.Printf("Failed to generate session token: %v", err)
-			c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/signup?error=token_err")
+			s.logger.Printf("Failed to generate signup token: %v", err)
+			c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/auth?error=token_err")
 			return
 		}
 
-		// Redirect to Signup Step 2 (Update Username) with Session Token
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://localhost:3000/signup?step=2&token=%s", token))
+		// Redirect to Signup Page with Token
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://localhost:3000/auth?step=2&signup_token=%s", signupToken))
 	}
 }
 
@@ -241,14 +225,46 @@ func (s *Service) HandleWalletLogin(c *gin.Context) {
 		return
 	}
 
-	// 5. Generate Session Token
-	token, err := s.GenerateWalletToken(req.Address)
+	// 5. Check if User Exists
+	user, err := s.db.GetUserByEthAddress(req.Address)
+	if err != nil {
+		// User Not Found -> Return Signup Token
+		signupClaims := SignupClaims{
+			Provider:   "wallet",
+			ProviderID: req.Address,
+			EthAddress: req.Address,
+		}
+		signupToken, err := s.GenerateSignupToken(signupClaims)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate signup token"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"status":       "signup_needed",
+			"signup_token": signupToken,
+		})
+		return
+	}
+
+	// 6. User Exists -> Login
+	token, err := s.GenerateSessionToken(user)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"token": token, "expires_in": 86400})
+	// Also generate wallet session for persistent wallet auth if needed?
+	// The original code was generating `GenerateWalletToken`.
+	// But `GenerateSessionToken` is for USER session.
+	// `GenerateWalletToken` was likely for the wallet context.
+	// Let's stick to `GenerateSessionToken` for full user login as we are migrating to user-centric.
+	// Wait, the previous code used `GenerateWalletToken`.
+	// Let's see what the frontend expects. `useWalletAuth` likely handles both.
+	// The original code returned `token` and `expires_in`.
+	// If the user is fully logged in, we should return the User Session Token.
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "token": token, "expires_in": 172800}) // 48h
 }
 
 // verifySignature checks if the signature matches the address for the given message

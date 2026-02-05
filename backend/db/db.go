@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/patiee/backend/db/model"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -53,7 +54,26 @@ func (d *Database) GetUserByProviderID(provider, providerID string) (user *model
 }
 
 func (d *Database) CreateUser(user *model.User) error {
+	if user.WidgetToken == "" {
+		user.WidgetToken = uuid.New().String()
+	}
 	return d.conn.Create(user).Error
+}
+
+func (d *Database) GetUserByEthAddress(address string) (*model.User, error) {
+	var user model.User
+	if err := d.conn.Where("eth_address = ?", address).First(&user).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (d *Database) GetUserByWidgetToken(token string) (*model.User, error) {
+	var user model.User
+	if err := d.conn.Where("widget_token = ?", token).First(&user).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
 
 func (d *Database) UpdateUserWallet(userID uint, ethAddress string) error {
@@ -171,6 +191,21 @@ func (d *Database) CleanupExpiredSessions() error {
 	// Clean Blacklist (Expired bans)
 	if err := d.conn.Where("expires_at < ?", now).Delete(&model.WalletBlacklist{}).Error; err != nil {
 		d.logger.Printf("Error cleaning blacklist: %v", err)
+	}
+	return nil
+}
+
+func (d *Database) EnsureWidgetTokens() error {
+	var users []model.User
+	if err := d.conn.Where("widget_token = '' OR widget_token IS NULL").Find(&users).Error; err != nil {
+		return err
+	}
+
+	for _, user := range users {
+		user.WidgetToken = uuid.New().String()
+		if err := d.conn.Save(&user).Error; err != nil {
+			d.logger.Printf("Failed to generate widget token for user %s: %v", user.Username, err)
+		}
 	}
 	return nil
 }

@@ -133,9 +133,15 @@ func (s *Server) Start(port string) {
 	r.GET("/api/user/:username", s.HandleGetUser)
 	r.POST("/api/tip", s.HandleTip)
 	r.GET("/api/me/tips", s.HandleGetTips)
+	r.GET("/api/widget/config/:token", s.HandleGetWidgetConfig)
 
 	// Start Background Cleanup Job (Every 24h)
 	go func() {
+		// Data Migration: Ensure all users have widget tokens
+		if err := s.service.db.EnsureWidgetTokens(); err != nil {
+			s.logger.Printf("Failed to ensure widget tokens: %v", err)
+		}
+
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 		for range ticker.C {
@@ -174,39 +180,63 @@ func (s *Server) Start(port string) {
 }
 
 func (s *Server) HandleSignup(c *gin.Context) {
-	authHeader := c.GetHeader("Authorization")
-	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid token"})
-		return
-	}
-	tokenString := authHeader[7:]
-
-	claims, err := s.service.ValidateSessionToken(tokenString)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
-		return
-	}
-
 	var req model.SignupRequest
+	// Note: We expect 'signup_token' in the body now
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return
 	}
 
-	if s.service.CheckUsernameTaken(req.Username, claims.UserID) {
+	if req.SignupToken == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing signup token"})
+		return
+	}
+
+	claims, err := s.service.ValidateSignupToken(req.SignupToken)
+	if err != nil {
+		s.logger.Printf("Invalid signup token: %v", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired signup token"})
+		return
+	}
+
+	// Validate Username (Basic check)
+	if len(req.Username) < 3 || len(req.Username) > 20 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Username must be between 3 and 20 characters"})
+		return
+	}
+
+	// We pass 0 as existing userID because this is a new user
+	if s.service.CheckUsernameTaken(req.Username, 0) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Username already taken"})
 		return
 	}
 
-	updatedUser, newToken, err := s.service.CompleteUserProfile(claims.UserID, req.Username, req.EthAddress, req.MainWallet)
+	// Register User
+	// Use claims data + request data (e.g. eth address might come from wallet connection in step 3)
+	// Priority: Claims EthAddress (if wallet login) > Request EthAddress (if linked later)
+	ethAddr := claims.EthAddress
+	if ethAddr == "" {
+		ethAddr = req.EthAddress
+	}
+
+	newUser, sessionToken, err := s.service.RegisterUser(
+		req.Username,
+		claims.Provider,
+		claims.ProviderID,
+		claims.Email,
+		claims.AvatarURL,
+		ethAddr,
+		req.MainWallet,
+	)
+
 	if err != nil {
-		s.logger.Printf("Failed to complete profile: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
+		s.logger.Printf("Failed to register user: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create account"})
 		return
 	}
 
-	s.logger.Printf("User profile completed: %s", updatedUser.Username)
-	c.JSON(http.StatusOK, gin.H{"message": "Profile updated", "user": updatedUser, "token": newToken})
+	s.logger.Printf("New user registered: %s (Provider: %s)", newUser.Username, claims.Provider)
+	c.JSON(http.StatusOK, gin.H{"message": "Registration successful", "user": newUser, "token": sessionToken})
 }
 
 func (s *Server) HandleLogin(c *gin.Context) {
@@ -411,15 +441,24 @@ func (s *Server) HandleGetTips(c *gin.Context) {
 }
 
 func (s *Server) HandleWS(c *gin.Context) {
-	streamerId := c.Param("streamerId")
+	token := c.Param("streamerId") // Route param is still :streamerId for now
+
+	// Authenticate via Widget Token
+	user, err := s.service.db.GetUserByWidgetToken(token)
+	if err != nil {
+		s.logger.Printf("WS Auth Failed: Invalid token %s", token)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid widget token"})
+		return
+	}
+
 	conn, err := s.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		s.logger.Printf("Failed to upgrade WS: %v", err)
 		return
 	}
 
-	s.service.RegisterClient(conn)
-	s.logger.Printf("New OBS widget connected for streamer: %s", streamerId)
+	s.service.RegisterClient(conn, user.ID)
+	s.logger.Printf("New OBS widget connected for user: %s (ID: %d)", user.Username, user.ID)
 
 	go func() {
 		defer s.service.UnregisterClient(conn)
@@ -430,4 +469,24 @@ func (s *Server) HandleWS(c *gin.Context) {
 			}
 		}
 	}()
+}
+
+func (s *Server) HandleGetWidgetConfig(c *gin.Context) {
+	token := c.Param("token")
+	user, err := s.service.db.GetUserByWidgetToken(token)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Widget not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"username":             user.Username,
+		"eth_address":          user.EthAddress,
+		"widget_tts":           user.WidgetTTS,
+		"widget_bg_color":      user.WidgetBgColor,
+		"widget_user_color":    user.WidgetUserColor,
+		"widget_amount_color":  user.WidgetAmountColor,
+		"widget_message_color": user.WidgetMessageColor,
+		"avatar_url":           user.AvatarURL,
+	})
 }
