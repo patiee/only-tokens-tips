@@ -196,31 +196,31 @@ func (s *Service) ProcessTip(tip model.TipRequest, claims *WalletClaims) (bool, 
 	// Verify Tx
 	verified, err := s.verifyTransaction(tip.ChainID, tip.TxHash, claims.WalletAddress, tip.Amount, tip.Asset)
 	if err != nil {
-		// Only strike for specific malicious-looking errors
-		if errors.Is(err, ErrTxNotFound) || errors.Is(err, ErrSenderMismatch) {
-			s.securityMu.Lock()
-			s.strikes[claims.WalletAddress]++
-			strikeCount := s.strikes[claims.WalletAddress]
-			s.securityMu.Unlock()
+		// // Only strike for specific malicious-looking errors
+		// if errors.Is(err, ErrTxNotFound) || errors.Is(err, ErrSenderMismatch) {
+		// 	s.securityMu.Lock()
+		// 	s.strikes[claims.WalletAddress]++
+		// 	strikeCount := s.strikes[claims.WalletAddress]
+		// 	s.securityMu.Unlock()
 
-			if strikeCount >= 3 {
-				// REVOKE SESSION
-				if revokeErr := s.db.RevokeWalletSessions(claims.WalletAddress); revokeErr != nil {
-					s.logger.Printf("Failed to revoke session for %s: %v", claims.WalletAddress, revokeErr)
-				}
+		// 	if strikeCount >= 3 {
+		// 		// REVOKE SESSION
+		// 		if revokeErr := s.db.RevokeWalletSessions(claims.WalletAddress); revokeErr != nil {
+		// 			s.logger.Printf("Failed to revoke session for %s: %v", claims.WalletAddress, revokeErr)
+		// 		}
 
-				// ADD TO BLACKLIST (24 Hours)
-				if blErr := s.db.BlacklistWallet(claims.WalletAddress, "3 strikes: invalid transactions", 24*time.Hour); blErr != nil {
-					s.logger.Printf("Failed to blacklist wallet %s: %v", claims.WalletAddress, blErr)
-				}
+		// 		// ADD TO BLACKLIST (24 Hours)
+		// 		if blErr := s.db.BlacklistWallet(claims.WalletAddress, "3 strikes: invalid transactions", 24*time.Hour); blErr != nil {
+		// 			s.logger.Printf("Failed to blacklist wallet %s: %v", claims.WalletAddress, blErr)
+		// 		}
 
-				s.securityMu.Lock()
-				delete(s.strikes, claims.WalletAddress)
-				s.securityMu.Unlock()
+		// 		s.securityMu.Lock()
+		// 		delete(s.strikes, claims.WalletAddress)
+		// 		s.securityMu.Unlock()
 
-				return false, "Session revoked and wallet blacklisted for 24h due to multiple invalid requests.", fmt.Errorf("session revoked and blacklisted")
-			}
-		}
+		// 		return false, "Session revoked and wallet blacklisted for 24h due to multiple invalid requests.", fmt.Errorf("session revoked and blacklisted")
+		// 	}
+		// }
 
 		return false, "", err
 	}
@@ -228,12 +228,12 @@ func (s *Service) ProcessTip(tip model.TipRequest, claims *WalletClaims) (bool, 
 		return false, "Transaction not valid", nil
 	}
 
-	// Success - Reset Strikes (Optional: Rewards good behavior)
-	s.securityMu.Lock()
-	if _, ok := s.strikes[claims.WalletAddress]; ok {
-		delete(s.strikes, claims.WalletAddress)
-	}
-	s.securityMu.Unlock()
+	// // Success - Reset Strikes (Optional: Rewards good behavior)
+	// s.securityMu.Lock()
+	// if _, ok := s.strikes[claims.WalletAddress]; ok {
+	// 	delete(s.strikes, claims.WalletAddress)
+	// }
+	// s.securityMu.Unlock()
 
 	// Notify
 	s.NotifyWidgets(tip)
