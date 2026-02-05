@@ -26,6 +26,8 @@ function WidgetSettingsContent() {
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [generating, setGenerating] = useState(false);
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [message, setMessage] = useState("");
     const [error, setError] = useState("");
     const router = useRouter();
@@ -38,13 +40,13 @@ function WidgetSettingsContent() {
     };
 
     useEffect(() => {
+        // ... (keep useEffect) ...
         const token = localStorage.getItem("user_token");
         if (!token) {
             router.push("/auth");
             return;
         }
 
-        // Fetch current settings (via /api/me)
         fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/me?token=` + token)
             .then(res => {
                 if (res.status === 401) throw new Error("Unauthorized");
@@ -74,7 +76,48 @@ function WidgetSettingsContent() {
             });
     }, [router]);
 
+    const handleRegenerateClick = () => {
+        setShowConfirmModal(true);
+    };
+
+    const confirmRegenerate = async () => {
+        setShowConfirmModal(false);
+        setGenerating(true);
+        setMessage("");
+        setError("");
+
+        const token = localStorage.getItem("user_token");
+        if (!token) return;
+
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/me/widget/regenerate`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                }
+            });
+
+            if (res.status === 401) {
+                localStorage.removeItem("user_token");
+                router.push("/");
+                return;
+            }
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to regenerate token");
+
+            setSettings(prev => ({ ...prev, widget_token: data.widget_token }));
+            setMessage("Widget URL regenerated successfully!");
+        } catch (e: any) {
+            setError(e.message);
+        } finally {
+            setGenerating(false);
+        }
+    };
+
     const handleSave = async () => {
+        // ... (keep existing logic, assuming it's unchanged) ...
         setSaving(true);
         setMessage("");
         setError("");
@@ -112,6 +155,7 @@ function WidgetSettingsContent() {
     };
 
     const ColorPicker = ({ label, value, onChange, presets = [] }: { label: string, value: string, onChange: (val: string) => void, presets?: string[] }) => (
+        // ... (keep existing ColorPicker) ...
         <div className="space-y-3">
             <label className="text-sm font-bold text-zinc-400 uppercase tracking-wider">{label}</label>
             {presets.length > 0 && (
@@ -162,7 +206,36 @@ function WidgetSettingsContent() {
     );
 
     return (
-        <div className="min-h-screen bg-black text-white p-4 sm:p-8">
+        <div className="min-h-screen bg-black text-white p-4 sm:p-8 relative">
+            {/* Confirmation Modal */}
+            {showConfirmModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-500/10 text-red-500 mb-4 mx-auto">
+                            <AlertTriangle size={24} />
+                        </div>
+                        <h3 className="text-xl font-bold text-center mb-2">Regenerate URL?</h3>
+                        <p className="text-zinc-400 text-center text-sm mb-6">
+                            This will immediately invalidate your current Widget URL. You will need to update your streaming software with the new URL.
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowConfirmModal(false)}
+                                className="flex-1 p-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-semibold transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmRegenerate}
+                                className="flex-1 p-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold shadow-lg shadow-red-900/20 transition-all"
+                            >
+                                Regenerate
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="max-w-4xl mx-auto space-y-8">
 
                 {/* Header */}
@@ -187,10 +260,43 @@ function WidgetSettingsContent() {
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Widget URL Section - Moved to Top */}
+                <div className="bg-zinc-950 p-6 rounded-2xl border border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex-1 w-full">
+                        <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-2">Widget URL (Private)</h3>
+                        <div className="flex items-center gap-2 bg-black p-3 rounded-lg border border-zinc-800 font-mono text-sm text-zinc-300 break-all">
+                            {window.location.origin}/widget/{settings.widget_token || '...'}
+                        </div>
+                        <p className="text-xs text-zinc-500 mt-2">
+                            Add this URL as a Browser Source in your streaming software (OBS, Streamlabs). Keep it private.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2 bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/50">
+                        <button
+                            onClick={() => {
+                                navigator.clipboard.writeText(`${window.location.origin}/widget/${settings.widget_token || settings.widget_token}`);
+                                setMessage("URL Copied!");
+                                setTimeout(() => setMessage(""), 2000);
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white transition-all font-semibold text-sm whitespace-nowrap border border-zinc-700 hover:border-zinc-600"
+                        >
+                            Copy URL
+                        </button>
+                        <button
+                            onClick={handleRegenerateClick}
+                            disabled={generating}
+                            title="Regenerate URL"
+                            className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 hover:border-red-500/40 transition-all"
+                        >
+                            <RefreshCw size={18} className={generating ? "animate-spin" : ""} />
+                        </button>
+                    </div>
+                </div>
 
-                    {/* Settings Form */}
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-8 h-fit">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+
+                    {/* Left Column: Configuration */}
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-8">
                         <div>
                             <h2 className="text-lg font-bold flex items-center gap-2 mb-6">
                                 <Monitor className="text-blue-400" /> Configuration
@@ -251,61 +357,52 @@ function WidgetSettingsContent() {
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    {/* Widget URL Section */}
-                    <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800">
-                        <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-2">Widget URL (Private)</h3>
-                        <div className="flex items-center gap-2 bg-black p-3 rounded-lg border border-zinc-800 font-mono text-sm text-zinc-300 break-all">
-                            {window.location.origin}/widget/{settings.widget_token || '...'}
-                        </div>
-                        <p className="text-xs text-zinc-500 mt-2">
-                            Keep this URL private. It allows your streaming software to connect to your alerts.
-                        </p>
-                    </div>
-
-                    <div className="pt-4 border-t border-zinc-800">
-                        <button
-                            onClick={handleSave}
-                            disabled={saving}
-                            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {saving ? (
-                                <span className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                            ) : (
-                                <Save size={18} />
-                            )}
-                            Save Settings
-                        </button>
-                    </div>
-                </div>
-
-                {/* Preview */}
-                <div className="space-y-6">
-                    <h2 className="text-lg font-bold flex items-center gap-2">
-                        Preview
-                    </h2>
-
-                    <div className="bg-checkerboard p-8 rounded-2xl border border-zinc-800 min-h-[400px] flex items-center justify-center overflow-hidden relative">
-                        <div className="absolute inset-0 opacity-20 pointer-events-none"
-                            style={{
-                                backgroundImage: "conic-gradient(#333 90deg, transparent 90deg)",
-                                backgroundSize: "20px 20px"
-                            }}
-                        />
-
-                        {/* Simulated Widget */}
-                        <div className="relative z-10 animate-in fade-in zoom-in-95 duration-500">
-                            <TipWidget
-                                tip={previewTip}
-                                config={settings}
-                                isPreview={true}
-                            />
+                        <div className="pt-4 border-t border-zinc-800">
+                            <button
+                                onClick={handleSave}
+                                disabled={saving}
+                                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {saving ? (
+                                    <span className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                ) : (
+                                    <Save size={18} />
+                                )}
+                                Save Settings
+                            </button>
                         </div>
                     </div>
-                    <p className="text-xs text-zinc-500 text-center">
-                        This is how the widget will appear on your stream. The grey checkerboard background represents transparency (if you set background to transparent).
-                    </p>
+
+                    {/* Right Column: Preview */}
+                    <div className="space-y-6 lg:sticky lg:top-8 h-fit">
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                            <h2 className="text-lg font-bold flex items-center gap-2 mb-6">
+                                Preview
+                            </h2>
+
+                            <div className="bg-checkerboard p-8 rounded-xl border border-zinc-800 min-h-[400px] flex items-center justify-center overflow-hidden relative">
+                                <div className="absolute inset-0 opacity-20 pointer-events-none"
+                                    style={{
+                                        backgroundImage: "conic-gradient(#333 90deg, transparent 90deg)",
+                                        backgroundSize: "20px 20px"
+                                    }}
+                                />
+
+                                {/* Simulated Widget */}
+                                <div className="relative z-10 animate-in fade-in zoom-in-95 duration-500 w-full flex justify-center">
+                                    <TipWidget
+                                        tip={previewTip}
+                                        config={settings}
+                                        isPreview={true}
+                                    />
+                                </div>
+                            </div>
+                            <p className="text-xs text-zinc-500 text-center mt-4">
+                                This is how the widget will appear on your stream. The checkerboard represents transparency.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </div>
 

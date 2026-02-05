@@ -209,3 +209,11 @@ func (d *Database) EnsureWidgetTokens() error {
 	}
 	return nil
 }
+func (d *Database) RefreshWidgetToken(userID uint) (string, error) {
+	newToken := uuid.New().String()
+	err := d.conn.Model(&model.User{}).Where("id = ?", userID).Update("widget_token", newToken).Error
+	if err != nil {
+		return "", err
+	}
+	return newToken, nil
+}

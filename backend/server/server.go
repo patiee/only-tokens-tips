@@ -130,6 +130,7 @@ func (s *Server) Start(port string) {
 	r.GET("/api/me", s.HandleMe)
 	r.PUT("/api/me/wallet", s.HandleUpdateWallet)
 	r.PUT("/api/me/widget", s.HandleUpdateWidget)
+	r.POST("/api/me/widget/regenerate", s.HandleRegenerateWidget)
 	r.GET("/api/user/:username", s.HandleGetUser)
 	r.POST("/api/tip", s.HandleTip)
 	r.GET("/api/me/tips", s.HandleGetTips)
@@ -353,6 +354,31 @@ func (s *Server) HandleUpdateWidget(c *gin.Context) {
 
 	s.logger.Printf("User %s updated widget config", claims.Username)
 	c.JSON(http.StatusOK, gin.H{"message": "Widget settings updated"})
+}
+
+func (s *Server) HandleRegenerateWidget(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid token"})
+		return
+	}
+	tokenString := authHeader[7:]
+
+	claims, err := s.service.ValidateSessionToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	newToken, err := s.service.RegenerateWidgetToken(claims.UserID)
+	if err != nil {
+		s.logger.Printf("Failed to regenerate widget token: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to regenerate token"})
+		return
+	}
+
+	s.logger.Printf("User %s regenerated widget token", claims.Username)
+	c.JSON(http.StatusOK, gin.H{"message": "Token regenerated", "widget_token": newToken})
 }
 
 func (s *Server) HandleTip(c *gin.Context) {

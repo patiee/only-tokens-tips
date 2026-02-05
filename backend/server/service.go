@@ -169,6 +169,10 @@ func (s *Service) RegisterUser(username, provider, providerID, email, avatar, et
 	return user, token, nil
 }
 
+func (s *Service) RegenerateWidgetToken(userID uint) (string, error) {
+	return s.db.RefreshWidgetToken(userID)
+}
+
 func (s *Service) UpdateWidgetConfig(userID uint, req model.UpdateWidgetRequest) error {
 	return s.db.UpdateWidgetConfig(userID, req.WaitTTS, req.BgColor, req.UserColor, req.AmountColor, req.MessageColor)
 }
