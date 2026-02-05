@@ -4,8 +4,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { jwtDecode } from "jwt-decode";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { useAccount, useSignMessage } from "wagmi";
+import { useAccount, useSignMessage, useReadContracts } from "wagmi";
 import { Twitch, Monitor, Chrome, ArrowLeft, ChevronDown, Check, Coins } from "lucide-react";
+import { isAddress, erc20Abi } from "viem";
 import Link from "next/link";
 import { evmChains, ChainConfig } from "@/config/generated-chains";
 
@@ -93,7 +94,7 @@ function AuthContent() {
                 <div className="absolute bottom-[10%] right-[10%] w-[40%] h-[40%] bg-blue-600/10 blur-[100px] rounded-full" />
             </div>
 
-            <div className="w-full max-w-xl bg-zinc-900/80 backdrop-blur-xl rounded-3xl p-8 border border-zinc-800 shadow-2xl relative z-10 transition-all duration-300 hover:shadow-purple-500/10 hover:border-zinc-700">
+            <div className="w-full max-w-2xl bg-zinc-900/80 backdrop-blur-xl rounded-3xl p-8 border border-zinc-800 shadow-2xl relative z-10 transition-all duration-300 hover:shadow-purple-500/10 hover:border-zinc-700">
 
                 <Link href="/" className="inline-flex items-center text-zinc-500 hover:text-white mb-6 transition-colors">
                     <ArrowLeft size={16} className="mr-2" /> Back
@@ -291,6 +292,50 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, 
     const [assetSearch, setAssetSearch] = useState("");
     const [tokens, setTokens] = useState<any[]>([]);
 
+    // Custom Token Import Logic
+    const [customToken, setCustomToken] = useState<any>(null);
+    const isSearchAddress = isAddress(assetSearch);
+    const isCustomTokenAlreadyListed = tokens.some(t => isSearchAddress && t.address.toLowerCase() === assetSearch.toLowerCase());
+
+    const { data: customTokenData } = useReadContracts({
+        contracts: [
+            {
+                address: isSearchAddress ? assetSearch as `0x${string}` : undefined,
+                abi: erc20Abi,
+                functionName: 'symbol',
+                chainId: selectedChainId,
+            },
+            {
+                address: isSearchAddress ? assetSearch as `0x${string}` : undefined,
+                abi: erc20Abi,
+                functionName: 'name',
+                chainId: selectedChainId,
+            },
+            {
+                address: isSearchAddress ? assetSearch as `0x${string}` : undefined,
+                abi: erc20Abi,
+                functionName: 'decimals',
+                chainId: selectedChainId,
+            }
+        ],
+        query: {
+            enabled: !!isSearchAddress && !isCustomTokenAlreadyListed,
+            retry: false
+        }
+    });
+
+    useEffect(() => {
+        if (customTokenData && customTokenData[0].result && customTokenData[1].result && customTokenData[2].result !== undefined) {
+            setCustomToken({
+                address: assetSearch as `0x${string}`,
+                symbol: customTokenData[0].result as string,
+                name: customTokenData[1].result as string,
+                decimals: Number(customTokenData[2].result),
+                logo: undefined
+            });
+        }
+    }, [customTokenData, assetSearch]);
+
     // Initialize Default Asset (Native) when chain changes
     useEffect(() => {
         const chain = evmChains.find(c => c.id === selectedChainId);
@@ -453,10 +498,15 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, 
                                 />
                             </div>
                             <div className="overflow-y-auto max-h-48">
-                                {tokens
-                                    .filter(t => t.symbol.toLowerCase().includes(assetSearch.toLowerCase()) || t.name.toLowerCase().includes(assetSearch.toLowerCase()))
-                                    .slice(0, 100)
-                                    .map((t, idx) => (
+                                {(() => {
+                                    const filtered = tokens
+                                        .filter(t => t.symbol.toLowerCase().includes(assetSearch.toLowerCase()) || t.name.toLowerCase().includes(assetSearch.toLowerCase()) || t.address.toLowerCase() === assetSearch.toLowerCase());
+
+                                    if (customToken && assetSearch && customToken.address.toLowerCase() === assetSearch.toLowerCase() && !filtered.some(t => t.address.toLowerCase() === customToken.address.toLowerCase())) {
+                                        filtered.push(customToken);
+                                    }
+
+                                    return filtered.slice(0, 100).map((t, idx) => (
                                         <button
                                             key={`${t.symbol}-${idx}`}
                                             type="button"
@@ -469,8 +519,9 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, 
                                                 <span className="text-xs text-zinc-500">{t.name}</span>
                                             </div>
                                         </button>
-                                    ))}
-                                {tokens.filter(t => t.symbol.toLowerCase().includes(assetSearch.toLowerCase()) || t.name.toLowerCase().includes(assetSearch.toLowerCase())).length === 0 && (
+                                    ));
+                                })()}
+                                {tokens.filter(t => t.symbol.toLowerCase().includes(assetSearch.toLowerCase()) || t.name.toLowerCase().includes(assetSearch.toLowerCase()) || t.address.toLowerCase() === assetSearch.toLowerCase()).length === 0 && !customToken && (
                                     <div className="px-4 py-3 text-zinc-500 text-sm italic">No assets found</div>
                                 )}
                             </div>
@@ -487,7 +538,7 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, 
             {isConnected && (
                 <div className="space-y-4 text-left">
                     <div className="p-3 bg-zinc-950/50 border border-zinc-800 rounded-xl break-all text-xs font-mono text-zinc-400 text-center">
-                        <span className="text-zinc-500">Connected:</span> {address?.slice(0, 6)}...{address?.slice(-4)}
+                        <span className="text-zinc-500">Connected:</span> {address}
                     </div>
                 </div>
             )}

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useAccount, useSendTransaction, useBalance, useSwitchChain, useReadContracts, useWriteContract, useConfig, useDisconnect } from "wagmi";
 import { useWalletAuth } from "@/hooks/useWalletAuth";
 import { readContract, waitForTransactionReceipt } from "wagmi/actions";
-import { parseEther, formatEther, erc20Abi } from "viem";
+import { parseEther, formatEther, erc20Abi, isAddress } from "viem";
 import { mainnet, base } from "wagmi/chains";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Check, ChevronDown, Wallet, Coins } from "lucide-react";
@@ -147,6 +147,53 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
         }
     });
 
+    // Custom Token Import Logic
+    const [customToken, setCustomToken] = useState<Token | null>(null);
+    const isSearchAddress = isAddress(assetSearch);
+    const isCustomTokenAlreadyListed = useMemo(() => {
+        if (!isSearchAddress) return false;
+        return tokens.some(t => t.address.toLowerCase() === assetSearch.toLowerCase());
+    }, [isSearchAddress, assetSearch, tokens]);
+
+    const { data: customTokenData, isFetching: isFetchingCustomToken } = useReadContracts({
+        contracts: [
+            {
+                address: isSearchAddress ? assetSearch as `0x${string}` : undefined,
+                abi: erc20Abi,
+                functionName: 'symbol',
+                chainId: selectedChainId,
+            },
+            {
+                address: isSearchAddress ? assetSearch as `0x${string}` : undefined,
+                abi: erc20Abi,
+                functionName: 'name',
+                chainId: selectedChainId,
+            },
+            {
+                address: isSearchAddress ? assetSearch as `0x${string}` : undefined,
+                abi: erc20Abi,
+                functionName: 'decimals',
+                chainId: selectedChainId,
+            }
+        ],
+        query: {
+            enabled: !!isSearchAddress && !isCustomTokenAlreadyListed,
+            retry: false
+        }
+    });
+
+    useEffect(() => {
+        if (customTokenData && customTokenData[0].result && customTokenData[1].result && customTokenData[2].result !== undefined) {
+            setCustomToken({
+                address: assetSearch as `0x${string}`,
+                symbol: customTokenData[0].result as string,
+                name: customTokenData[1].result as string,
+                decimals: Number(customTokenData[2].result),
+                logo: undefined // No logo for custom import usually
+            });
+        }
+    }, [customTokenData, assetSearch]);
+
     // Strategy: We can't fetch balances for ALL tokens (too many).
     // so we identify "Tokens to Check": Native + Popular Tokens found in list.
     const tokensToCheck = useMemo(() => {
@@ -160,8 +207,10 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
         // Also take top 10 from the list just in case
         const top10 = tokens.slice(0, 10).filter(t => t.address !== "0x0000000000000000000000000000000000000000" && !POPULAR_SYMBOLS.includes(t.symbol));
 
-        return [...popular, ...top10];
-    }, [tokens]);
+        const list = [...popular, ...top10];
+        if (customToken) list.push(customToken);
+        return list;
+    }, [tokens, customToken]);
 
     // Batch fetch balances for these tokens
     const { data: tokenBalances } = useReadContracts({
@@ -189,9 +238,14 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
 
     // Computed Sorted Tokens
     const sortedTokens = useMemo(() => {
-        if (!tokens.length) return [];
+        let allTokens = [...tokens];
+        if (customToken && !allTokens.some(t => t.address.toLowerCase() === customToken.address.toLowerCase())) {
+            allTokens.push(customToken);
+        }
 
-        return [...tokens].sort((a, b) => {
+        if (!allTokens.length) return [];
+
+        return allTokens.sort((a, b) => {
             // Get balances
             let balA = BigInt(0);
             let balB = BigInt(0);
@@ -490,7 +544,7 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
                                 </div>
                                 <div className="overflow-y-auto">
                                     {sortedTokens
-                                        .filter(t => t.symbol.toLowerCase().includes(assetSearch.toLowerCase()) || t.name.toLowerCase().includes(assetSearch.toLowerCase()))
+                                        .filter(t => t.symbol.toLowerCase().includes(assetSearch.toLowerCase()) || t.name.toLowerCase().includes(assetSearch.toLowerCase()) || t.address.toLowerCase() === assetSearch.toLowerCase())
                                         .map((t) => {
                                             let balStr = "";
                                             if (t.address === "0x0000000000000000000000000000000000000000") {
@@ -528,7 +582,7 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
                                                 </button>
                                             );
                                         })}
-                                    {sortedTokens.filter(t => t.symbol.toLowerCase().includes(assetSearch.toLowerCase()) || t.name.toLowerCase().includes(assetSearch.toLowerCase())).length === 0 && (
+                                    {sortedTokens.filter(t => t.symbol.toLowerCase().includes(assetSearch.toLowerCase()) || t.name.toLowerCase().includes(assetSearch.toLowerCase()) || t.address.toLowerCase() === assetSearch.toLowerCase()).length === 0 && (
                                         <div className="px-4 py-3 text-zinc-500 text-sm italic">No assets found</div>
                                     )}
                                 </div>
