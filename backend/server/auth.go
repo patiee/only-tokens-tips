@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
+	"github.com/mr-tron/base58"
 	"github.com/patiee/backend/server/model"
 	"golang.org/x/oauth2"
 )
@@ -268,52 +270,75 @@ func (s *Service) HandleWalletLogin(c *gin.Context) {
 }
 
 // verifySignature checks if the signature matches the address for the given message
-// Uses go-ethereum crypto
-func verifySignature(address, message, signatureHex string) (bool, error) {
-	// 1. Decode Signature (Hex -> Bytes)
-	// Remove 0x prefix if present
-	if len(signatureHex) > 2 && signatureHex[:2] == "0x" {
-		signatureHex = signatureHex[2:]
+// Uses go-ethereum crypto or ed25519 for Solana
+func verifySignature(address, message, signatureStr string) (bool, error) {
+	// 0. Detect Chain Type by Address Format
+	isEVM := strings.HasPrefix(address, "0x")
+
+	if isEVM {
+		// --- EVM Logic (Existing) ---
+		// 1. Decode Signature (Hex -> Bytes)
+		if len(signatureStr) > 2 && signatureStr[:2] == "0x" {
+			signatureStr = signatureStr[2:]
+		}
+		sigBytes, err := hex.DecodeString(signatureStr)
+		if err != nil {
+			return false, fmt.Errorf("invalid hex signature")
+		}
+
+		// 2. Handle Signature V recovery ID
+		if len(sigBytes) != 65 {
+			return false, fmt.Errorf("invalid signature length")
+		}
+		if sigBytes[64] >= 27 {
+			sigBytes[64] -= 27
+		}
+
+		// 3. Hash the Message (EIP-191)
+		prefix := fmt.Sprintf("\x19Ethereum Signed Message:\n%d", len(message))
+		data := []byte(prefix + message)
+		hash := crypto.Keccak256Hash(data)
+
+		// 4. Recover Public Key
+		pubKey, err := crypto.SigToPub(hash.Bytes(), sigBytes)
+		if err != nil {
+			return false, err
+		}
+
+		recoveredAddr := crypto.PubkeyToAddress(*pubKey)
+		return strings.EqualFold(recoveredAddr.Hex(), address), nil
+
+	} else {
+		// --- Solana Logic (Ed25519) ---
+		// 1. Decode Address (Base58 -> PubKey Bytes)
+		pubKeyBytes, err := base58.Decode(address)
+		if err != nil {
+			return false, fmt.Errorf("invalid solana address: %v", err)
+		}
+		if len(pubKeyBytes) != 32 {
+			return false, fmt.Errorf("invalid solana pubkey length")
+		}
+
+		// 2. Decode Signature (Try Base58 first, then Hex - Frontend likely sends Base58)
+		sigBytes, err := base58.Decode(signatureStr)
+		if err != nil {
+			// Fallback to Hex if Base58 fails (just in case frontend sends hex)
+			var hexErr error
+			sigBytes, hexErr = hex.DecodeString(signatureStr)
+			if hexErr != nil {
+				return false, fmt.Errorf("invalid signature (not base58 or hex): %v", err)
+			}
+		}
+
+		if len(sigBytes) != 64 {
+			return false, fmt.Errorf("invalid ed25519 signature length: %d", len(sigBytes))
+		}
+
+		// 3. Verify Signature (Raw Message)
+		// Solana signMessage usually signs the raw bytes of the message string
+		msgBytes := []byte(message)
+
+		isValid := ed25519.Verify(ed25519.PublicKey(pubKeyBytes), msgBytes, sigBytes)
+		return isValid, nil
 	}
-	sigBytes, err := hex.DecodeString(signatureHex)
-	if err != nil {
-		return false, fmt.Errorf("invalid hex signature")
-	}
-
-	// 2. Handle Signature V recovery ID (it's 27/28 or 0/1 depending on client)
-	// Ethereum crypto library expects 0/1
-	if len(sigBytes) != 65 {
-		return false, fmt.Errorf("invalid signature length")
-	}
-	if sigBytes[64] >= 27 {
-		sigBytes[64] -= 27
-	}
-
-	// 3. Hash the Message (EIP-191 personal sign format)
-	// prefix = "\x19Ethereum Signed Message:\n" + len(msg)
-	prefix := fmt.Sprintf("\x19Ethereum Signed Message:\n%d", len(message))
-	data := []byte(prefix + message)
-	hash := crypto.Keccak256Hash(data)
-
-	// 4. Recover Public Key
-	// We use SigToPub below, which wraps Ecrecover, but for EIP-191 we need to be careful.
-	// crypto.SigToPub(hash, sig) does the recovery.
-
-	// 5. Convert Public Key to Address
-	// Need to unmarshal the pubkey bytes to ECDSA pubkey then to address
-	// Ecrecover returns uncompressed pubkey bytes (65 bytes), first byte is 0x04
-	// remove first byte 0x04 (if present in Ecrecover result? Ecrecover returns 65 bytes usually)
-	// Actually crypto.UnmarshalPubkey expects it. But crypto.PubkeyToAddress takes *ecdsa.PublicKey.
-	// crypto.SigToPub is easier but it does hash internally which we already did? No, SigToPub takes raw hash.
-	// Let's use crypto.SigToPub which wraps Ecrecover
-
-	pubKey, err := crypto.SigToPub(hash.Bytes(), sigBytes)
-	if err != nil {
-		return false, err
-	}
-
-	recoveredAddr := crypto.PubkeyToAddress(*pubKey)
-
-	// 6. Compare Addresses (Case insensitive)
-	return strings.EqualFold(recoveredAddr.Hex(), address), nil
 }

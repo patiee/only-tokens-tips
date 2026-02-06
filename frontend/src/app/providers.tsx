@@ -9,15 +9,22 @@ import { useState } from "react";
 
 import { config } from "@/config/wagmi";
 
+import dynamic from "next/dynamic";
+
+// Dynamically import SolanaProvider to avoid SSR issues with wallet adapters
+const SolanaProvider = dynamic(() => import("@/providers/SolanaProvider"), { ssr: false });
+
 export function Providers({ children }: { children: React.ReactNode }) {
     const [queryClient] = useState(() => new QueryClient());
 
     return (
         <WagmiProvider config={config}>
             <QueryClientProvider client={queryClient}>
-                <RainbowKitProvider>
-                    {children}
-                </RainbowKitProvider>
+                <SolanaProvider>
+                    <RainbowKitProvider>
+                        {children}
+                    </RainbowKitProvider>
+                </SolanaProvider>
             </QueryClientProvider>
         </WagmiProvider>
     );

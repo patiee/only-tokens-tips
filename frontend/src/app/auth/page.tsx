@@ -5,10 +5,13 @@ import { useEffect, useState, Suspense } from "react";
 import { jwtDecode } from "jwt-decode";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useSignMessage, useReadContracts } from "wagmi";
-import { Twitch, Monitor, Chrome, ArrowLeft, ChevronDown, Check, Coins } from "lucide-react";
+import { Twitch, Monitor, Chrome, ArrowLeft, ChevronDown, Check, Coins, AlertTriangle } from "lucide-react";
 import { isAddress, erc20Abi } from "viem";
 import Link from "next/link";
-import { evmChains, ChainConfig } from "@/config/generated-chains";
+import { evmChains } from "@/config/generated-chains";
+import { allChains, chainFamilies, ChainFamily, CustomChainConfig, isValidAddress } from "@/config/chains";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { WalletMultiButton, useWalletModal } from "@solana/wallet-adapter-react-ui";
 
 export default function AuthPage() {
     return (
@@ -280,8 +283,10 @@ interface FormData {
 
 function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, onBack: () => void, onError: (msg: string) => void }) {
     const { address, isConnected } = useAccount();
+    const { publicKey, connected: solanaConnected } = useWallet();
     const router = useRouter();
     const [loading, setLoading] = useState(false);
+    const [showSessionExpired, setShowSessionExpired] = useState(false);
 
     // Preferences
     const [selectedChainId, setSelectedChainId] = useState<number>(evmChains[0]?.id || 1);
@@ -294,38 +299,44 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, 
 
     // Custom Token Import Logic
     const [customToken, setCustomToken] = useState<any>(null);
-    const isSearchAddress = isAddress(assetSearch);
-    const isCustomTokenAlreadyListed = tokens.some(t => isSearchAddress && t.address.toLowerCase() === assetSearch.toLowerCase());
 
+    // Select chain object
+    const selectedChain = allChains.find(c => c.id === selectedChainId);
+
+    // Determine validity based on family
+    const isValidInputInfo = selectedChain ? isValidAddress(assetSearch, selectedChain.family) : false;
+    const isEVM = selectedChain?.family === ChainFamily.EVM;
+
+    // EVM: Use Wagmi
     const { data: customTokenData } = useReadContracts({
         contracts: [
             {
-                address: isSearchAddress ? assetSearch as `0x${string}` : undefined,
+                address: (isValidInputInfo && isEVM) ? assetSearch as `0x${string}` : undefined,
                 abi: erc20Abi,
                 functionName: 'symbol',
                 chainId: selectedChainId,
             },
             {
-                address: isSearchAddress ? assetSearch as `0x${string}` : undefined,
+                address: (isValidInputInfo && isEVM) ? assetSearch as `0x${string}` : undefined,
                 abi: erc20Abi,
                 functionName: 'name',
                 chainId: selectedChainId,
             },
             {
-                address: isSearchAddress ? assetSearch as `0x${string}` : undefined,
+                address: (isValidInputInfo && isEVM) ? assetSearch as `0x${string}` : undefined,
                 abi: erc20Abi,
                 functionName: 'decimals',
                 chainId: selectedChainId,
             }
         ],
         query: {
-            enabled: !!isSearchAddress && !isCustomTokenAlreadyListed,
+            enabled: !!isValidInputInfo && isEVM && !tokens.some(t => t.address.toLowerCase() === assetSearch.toLowerCase()),
             retry: false
         }
     });
 
     useEffect(() => {
-        if (customTokenData && customTokenData[0].result && customTokenData[1].result && customTokenData[2].result !== undefined) {
+        if (customTokenData && customTokenData[0]?.result && customTokenData[1]?.result && customTokenData[2]?.result !== undefined) {
             setCustomToken({
                 address: assetSearch as `0x${string}`,
                 symbol: customTokenData[0].result as string,
@@ -336,9 +347,56 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, 
         }
     }, [customTokenData, assetSearch]);
 
+    // Non-EVM (Solana/Sui/BTC) Effect - Using DexScreener
+    useEffect(() => {
+        if (isValidInputInfo && !isEVM && !tokens.some(t => t.address.toLowerCase() === assetSearch.toLowerCase())) {
+            // Fetch from DexScreener
+            fetch(`https://api.dexscreener.com/latest/dex/tokens/${assetSearch}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.pairs && data.pairs.length > 0) {
+                        const pair = data.pairs[0];
+                        const baseToken = pair.baseToken;
+                        setCustomToken({
+                            address: baseToken.address,
+                            symbol: baseToken.symbol,
+                            name: baseToken.name,
+                            decimals: 9, // DexScreener doesn't always return decimals
+                            logo: undefined
+                        });
+                    }
+                })
+                .catch(err => console.error("Failed to fetch non-evm token", err));
+        } else if (!isValidInputInfo) {
+            setCustomToken(null);
+        }
+    }, [assetSearch, isValidInputInfo, isEVM, tokens]);
+
+    const handleChainSelect = (chainId: number) => {
+        const newChain = allChains.find(c => c.id === chainId);
+
+        setSelectedChainId(chainId);
+        setChainDropdownOpen(false);
+        setChainSearch("");
+
+        if (newChain) {
+            const native = {
+                symbol: newChain.nativeToken.symbol,
+                address: newChain.nativeToken.address,
+                logo: newChain.nativeToken.logoURI,
+                name: newChain.nativeToken.name,
+                decimals: newChain.nativeToken.decimals
+            };
+            // Reset asset to native
+            setSelectedAsset(native);
+            setTokens([native]);
+        }
+    };
+
+
     // Initialize Default Asset (Native) when chain changes
     useEffect(() => {
-        const chain = evmChains.find(c => c.id === selectedChainId);
+        const chain = allChains.find(c => c.id === selectedChainId);
         if (chain) {
             const native = {
                 symbol: chain.nativeToken.symbol,
@@ -347,41 +405,95 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, 
                 name: chain.nativeToken.name,
                 decimals: chain.nativeToken.decimals
             };
-            setTokens([native]);
-            setSelectedAsset(native);
 
-            // Optional: Fetch more tokens from LiFi
-            fetch(`https://li.quest/v1/tokens?chains=${selectedChainId}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.tokens && data.tokens[selectedChainId]) {
-                        const extraTokens = data.tokens[selectedChainId]
-                            .filter((t: { address: string }) => t.address !== "0x0000000000000000000000000000000000000000")
-                            .map((t: { symbol: string, name: string, address: string, logoURI: string, decimals: number }) => ({
-                                symbol: t.symbol,
-                                name: t.name,
-                                address: t.address,
-                                logo: t.logoURI,
-                                decimals: t.decimals
-                            }));
-                        setTokens(prev => [...prev, ...extraTokens]);
-                    }
-                })
-                .catch(err => console.error("Failed to fetch tokens", err));
+            // Only fetch LiFi tokens if it's an EVM chain
+            if (chain.family === ChainFamily.EVM) {
+                fetch(`https://li.quest/v1/tokens?chains=${selectedChainId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        let newTokens = [native];
+                        if (data.tokens && data.tokens[selectedChainId]) {
+                            const extraTokens = data.tokens[selectedChainId]
+                                .filter((t: { address: string }) => t.address !== "0x0000000000000000000000000000000000000000")
+                                .map((t: { symbol: string, name: string, address: string, logoURI: string, decimals: number }) => ({
+                                    symbol: t.symbol,
+                                    name: t.name,
+                                    address: t.address,
+                                    logo: t.logoURI,
+                                    decimals: t.decimals
+                                }));
+                            newTokens = [...newTokens, ...extraTokens];
+                        }
+                        setTokens(newTokens);
+                        // If current selection is invalid for new chain, it was already reset in handleChainSelect to native.
+                        // But if we just loaded, ensure selectedAsset is set
+                        setSelectedAsset(prev => prev && prev.symbol === native.symbol ? prev : native);
+                    })
+                    .catch(err => {
+                        console.error("Failed to fetch tokens", err);
+                        setTokens([native]);
+                        setSelectedAsset(native);
+                    });
+            } else if (chain.family === ChainFamily.SOLANA) {
+                // Fetch from Jupiter Strict List via Proxy
+                fetch('/api/jupiter/tokens')
+                    .then(res => {
+                        if (!res.ok) throw new Error("Failed to fetch");
+                        return res.json();
+                    })
+                    .then(data => {
+                        // Data is array of { address, chainId, decimals, name, symbol, logoURI }
+                        const solTokens = data.slice(0, 100).map((t: any) => ({
+                            symbol: t.symbol,
+                            name: t.name,
+                            address: t.address,
+                            logo: t.logoURI,
+                            decimals: t.decimals
+                        }));
+                        let newTokens = [native, ...solTokens];
+                        setTokens(newTokens);
+                        setSelectedAsset(prev => prev && prev.symbol === native.symbol ? prev : native);
+                    })
+                    .catch(err => {
+                        console.error("Failed to fetch Solana tokens", err);
+                        setTokens([native]);
+                        setSelectedAsset(native);
+                    });
+            } else {
+                // Non-EVM, just native for now unless we have a manual list
+                setTokens([native]);
+                setSelectedAsset(native);
+            }
         }
     }, [selectedChainId]);
 
     const handleFinish = async () => {
         setLoading(true);
         try {
+            // Determine active address based on chain family
+            let finalAddress = "";
+            let isMainWallet = false;
+
+            if (selectedChain?.family === ChainFamily.SOLANA) {
+                if (solanaConnected && publicKey) {
+                    finalAddress = publicKey.toBase58();
+                    isMainWallet = true;
+                }
+            } else {
+                if (isConnected && address) {
+                    finalAddress = address;
+                    isMainWallet = true;
+                }
+            }
+
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/auth/signup`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     username: formData.username,
                     signup_token: formData.signup_token,
-                    eth_address: address || "",
-                    main_wallet: !!address,
+                    eth_address: finalAddress,
+                    main_wallet: isMainWallet,
                     // New Preferences
                     preferred_chain_id: selectedChainId,
                     preferred_asset_address: selectedAsset?.address || "0x0000000000000000000000000000000000000000"
@@ -394,8 +506,7 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, 
                 router.push("/me");
             } else {
                 if (res.status === 401) {
-                    alert("Session expired. Please login again.");
-                    router.push("/auth");
+                    setShowSessionExpired(true);
                     return;
                 }
                 if (res.status === 409 || data.error?.includes("already taken") || data.error?.includes("Username")) {
@@ -412,10 +523,21 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, 
         }
     };
 
-    const selectedChain = evmChains.find(c => c.id === selectedChainId);
+    // Grouping chains for dropdown
+    const groupedChains = chainFamilies.map(family => ({
+        family,
+        chains: allChains.filter(c => c.family === family)
+    }));
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 text-center">
+            <SessionExpiredModal
+                isOpen={showSessionExpired}
+                onClose={() => {
+                    setShowSessionExpired(false);
+                    router.push("/auth");
+                }}
+            />
             <div>
                 <h2 className="text-2xl font-bold mb-2">Connect Wallet</h2>
                 <p className="text-zinc-400 text-sm">Link your Ethereum wallet to receive tips directly.</p>
@@ -453,20 +575,30 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, 
                                 />
                             </div>
                             <div className="overflow-y-auto max-h-48">
-                                {evmChains
-                                    .filter(c => c.name.toLowerCase().includes(chainSearch.toLowerCase()))
-                                    .map(c => (
-                                        <button
-                                            key={c.id}
-                                            type="button"
-                                            onClick={() => { setSelectedChainId(c.id); setChainDropdownOpen(false); setChainSearch(""); }}
-                                            className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-2"
-                                        >
-                                            <img src={c.logoURI} alt={c.name} className="w-5 h-5 rounded-full" />
-                                            <span>{c.name}</span>
-                                        </button>
-                                    ))}
-                                {evmChains.filter(c => c.name.toLowerCase().includes(chainSearch.toLowerCase())).length === 0 && (
+                                {groupedChains.map(group => {
+                                    const filteredChains = group.chains.filter(c => c.name.toLowerCase().includes(chainSearch.toLowerCase()));
+                                    if (filteredChains.length === 0) return null;
+
+                                    return (
+                                        <div key={group.family}>
+                                            <div className="px-4 py-2 text-xs font-bold text-zinc-500 bg-zinc-900/50 uppercase tracking-wider sticky top-0">
+                                                {group.family}
+                                            </div>
+                                            {filteredChains.map(c => (
+                                                <button
+                                                    key={c.id}
+                                                    type="button"
+                                                    onClick={() => handleChainSelect(c.id)}
+                                                    className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-2"
+                                                >
+                                                    <img src={c.logoURI} alt={c.name} className="w-5 h-5 rounded-full" />
+                                                    <span>{c.name}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    );
+                                })}
+                                {allChains.filter(c => c.name.toLowerCase().includes(chainSearch.toLowerCase())).length === 0 && (
                                     <div className="px-4 py-3 text-zinc-500 text-sm italic">No networks found</div>
                                 )}
                             </div>
@@ -537,71 +669,77 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, 
             </div>
 
             <div className="flex justify-center py-2">
-                <ConnectButton.Custom>
-                    {({
-                        account,
-                        chain,
-                        openAccountModal,
-                        openChainModal,
-                        openConnectModal,
-                        authenticationStatus,
-                        mounted,
-                    }) => {
-                        const ready = mounted && authenticationStatus !== 'loading';
-                        const connected =
-                            ready &&
-                            account &&
-                            chain &&
-                            (!authenticationStatus ||
-                                authenticationStatus === 'authenticated');
+                {selectedChain?.family === ChainFamily.SOLANA ? (
+                    <div className="w-full flex justify-center">
+                        <CustomSolanaConnectButton />
+                    </div>
+                ) : (
+                    <ConnectButton.Custom>
+                        {({
+                            account,
+                            chain,
+                            openAccountModal,
+                            openChainModal,
+                            openConnectModal,
+                            authenticationStatus,
+                            mounted,
+                        }) => {
+                            const ready = mounted && authenticationStatus !== 'loading';
+                            const connected =
+                                ready &&
+                                account &&
+                                chain &&
+                                (!authenticationStatus ||
+                                    authenticationStatus === 'authenticated');
 
-                        return (
-                            <div
-                                {...(!ready && {
-                                    'aria-hidden': true,
-                                    'style': {
-                                        opacity: 0,
-                                        pointerEvents: 'none',
-                                        userSelect: 'none',
-                                    },
-                                })}
-                                className="w-full"
-                            >
-                                {(() => {
-                                    if (!connected) {
+                            return (
+                                <div
+                                    {...(!ready && {
+                                        'aria-hidden': true,
+                                        'style': {
+                                            opacity: 0,
+                                            pointerEvents: 'none',
+                                            userSelect: 'none',
+                                        },
+                                    })}
+                                    className="w-full"
+                                >
+                                    {(() => {
+                                        if (!connected) {
+                                            return (
+                                                <button onClick={openConnectModal} type="button" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg shadow-blue-900/20">
+                                                    Connect Wallet
+                                                </button>
+                                            );
+                                        }
+
+                                        if (chain.unsupported) {
+                                            return (
+                                                <button onClick={openChainModal} type="button" className="w-full bg-red-500 hover:bg-red-400 text-white font-bold py-3 px-4 rounded-xl transition-all">
+                                                    Wrong network
+                                                </button>
+                                            );
+                                        }
+
                                         return (
-                                            <button onClick={openConnectModal} type="button" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg shadow-blue-900/20">
-                                                Connect Wallet
+                                            <button onClick={openAccountModal} type="button" className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-center gap-3 transition-all hover:bg-zinc-900">
+                                                {account.ensAvatar ? (
+                                                    <img src={account.ensAvatar} alt="ENS Avatar" className="w-6 h-6 rounded-full" />
+                                                ) : (
+                                                    <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-[10px] font-bold">
+                                                        {account.displayName ? account.displayName[0] : "W"}
+                                                    </div>
+                                                )}
+                                                <span className="font-medium text-lg text-xs break-all">{account.address}</span>
+                                                <ChevronDown size={16} className="text-zinc-500" />
                                             </button>
                                         );
-                                    }
-
-                                    if (chain.unsupported) {
-                                        return (
-                                            <button onClick={openChainModal} type="button" className="w-full bg-red-500 hover:bg-red-400 text-white font-bold py-3 px-4 rounded-xl transition-all">
-                                                Wrong network
-                                            </button>
-                                        );
-                                    }
-
-                                    return (
-                                        <button onClick={openAccountModal} type="button" className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-center gap-3 transition-all hover:bg-zinc-900">
-                                            {account.ensAvatar ? (
-                                                <img src={account.ensAvatar} alt="ENS Avatar" className="w-6 h-6 rounded-full" />
-                                            ) : (
-                                                <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-[10px] font-bold">
-                                                    {account.displayName ? account.displayName[0] : "W"}
-                                                </div>
-                                            )}
-                                            <span className="font-medium text-lg text-xs break-all">{account.address}</span>
-                                            <ChevronDown size={16} className="text-zinc-500" />
-                                        </button>
-                                    );
-                                })()}
-                            </div>
-                        );
-                    }}
-                </ConnectButton.Custom>
+                                    })()}
+                                </div>
+                            );
+                        }}
+                    </ConnectButton.Custom>
+                )}
             </div>
 
 
@@ -619,7 +757,7 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, 
                     ) : "Finish Setup"}
                 </button>
 
-                {!isConnected && (
+                {!isConnected && !solanaConnected && (
                     <button
                         onClick={() => handleFinish()}
                         className="text-zinc-500 hover:text-zinc-300 text-sm"
@@ -633,5 +771,62 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, 
                 </button>
             </div>
         </div>
+    );
+}
+
+function SessionExpiredModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-500/10 text-red-500 mb-4 mx-auto">
+                    <AlertTriangle size={24} />
+                </div>
+                <h3 className="text-xl font-bold text-center mb-2">Session Expired</h3>
+                <p className="text-zinc-400 text-center text-sm mb-6">
+                    Your session credential has expired or is invalid. Please sign in again to continue.
+                </p>
+                <div className="flex justify-center">
+                    <button
+                        onClick={onClose}
+                        className="w-full p-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold shadow-lg shadow-red-900/20 transition-all"
+                    >
+                        Back to Login
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function CustomSolanaConnectButton() {
+    const { setVisible } = useWalletModal();
+    const { publicKey, connected, wallet } = useWallet();
+
+    if (!connected) {
+        return (
+            <button
+                onClick={() => setVisible(true)}
+                type="button"
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg shadow-blue-900/20"
+            >
+                Connect Wallet
+            </button>
+        );
+    }
+
+    return (
+        <button
+            onClick={() => setVisible(true)}
+            type="button"
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-center gap-3 transition-all hover:bg-zinc-900"
+        >
+            <div className="w-6 h-6 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center text-[10px] font-bold">
+                {wallet?.adapter.icon ? <img src={wallet.adapter.icon} className="w-6 h-6 rounded-full" alt="Wallet" /> : "S"}
+            </div>
+            <span className="font-medium text-lg text-xs break-all">{publicKey?.toBase58()}</span>
+            <ChevronDown size={16} className="text-zinc-500" />
+        </button>
     );
 }
