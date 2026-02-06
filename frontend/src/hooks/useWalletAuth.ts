@@ -13,7 +13,7 @@ export function useWalletAuth() {
      * Checks if we have a valid token in memory or localStorage.
      * If not, prompts the user to sign a message and logs in.
      */
-    const authenticate = useCallback(async () => {
+    const authenticate = useCallback(async (options?: { preventRedirect?: boolean }) => {
         if (!address) throw new Error("Wallet not connected");
 
         // 1. Check if we already have a valid token for this address
@@ -55,6 +55,9 @@ export function useWalletAuth() {
 
             // Handle Signup Needed
             if (data.status === "signup_needed") {
+                if (options?.preventRedirect) {
+                    return data.signup_token || null;
+                }
                 window.location.href = `/auth?step=2&signup_token=${data.signup_token}`;
                 return null;
             }
