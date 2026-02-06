@@ -228,7 +228,7 @@ function DashboardContent() {
                                     <Wallet className="text-blue-400" /> Wallet
                                 </h3>
                                 <Link
-                                    href="/me/wallets"
+                                    href="/me/wallet"
                                     className="text-xs font-semibold text-blue-400 hover:text-blue-300 bg-blue-900/20 hover:bg-blue-900/30 px-3 py-1.5 rounded-full transition-colors"
                                 >
                                     Edit

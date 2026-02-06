@@ -19,16 +19,6 @@ export function SolanaLoginButton({ setStep, setFormData }: { setStep: (step: nu
             const message = new TextEncoder().encode(messageStr);
 
             const signatureBytes = await signMessage(message);
-            // Encode signature to Base58 (standard for Solana)
-            // But we need a way to encode. installing bs58 package?
-            // Or use Buffer? Buffer is node.
-            // Let's stick to Hex if we can easily?
-            // No, standard Solana signature is Base58.
-            // I'll assume we can use `bs58` package. If not installed, I'll use a helper.
-            // Wait, we didn't install bs58. @solana/web3.js has it inside maybe?
-            // We can simple use a Hex encoding for now to avoid extra deps if the backend supports Hex.
-            // Backend `verifySignature` supports Hex fallback.
-            // So we can send Hex.
 
             // Hex encoding helper
             const signature = Array.from(signatureBytes).map(b => b.toString(16).padStart(2, '0')).join('');

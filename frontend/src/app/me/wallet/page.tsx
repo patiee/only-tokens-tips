@@ -10,7 +10,7 @@ import { isAddress, erc20Abi } from "viem";
 import { evmChains } from "@/config/generated-chains";
 import { allChains, chainFamilies, ChainFamily, CustomChainConfig, isValidAddress } from "@/config/chains";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
+import { CustomSolanaWalletModal } from "@/components/CustomSolanaWalletModal";
 
 export type UserProfile = {
     username: string;
@@ -36,6 +36,9 @@ function WalletsContent() {
     // Preferences State
     const [selectedChainId, setSelectedChainId] = useState<number>(evmChains[0]?.id || 1);
     const [selectedAsset, setSelectedAsset] = useState<{ symbol: string; address: string; logo?: string; name?: string } | null>(null);
+
+    // Modal State
+    const [isSolanaModalOpen, setIsSolanaModalOpen] = useState(false);
     const [chainDropdownOpen, setChainDropdownOpen] = useState(false);
     const [assetDropdownOpen, setAssetDropdownOpen] = useState(false);
     const [chainSearch, setChainSearch] = useState("");
@@ -351,14 +354,23 @@ function WalletsContent() {
         </div>
     );
 
-    const isDifferent = profile && address && profile.eth_address.toLowerCase() !== address.toLowerCase();
+    // Determine current connected address based on selected family
+    const currentAddress = selectedChain?.family === ChainFamily.SOLANA
+        ? (solanaConnected && publicKey ? publicKey.toBase58() : null)
+        : (isConnected && address ? address : null);
+
+    // Check if wallet matches profile
+    const isDifferent = profile && currentAddress && profile.eth_address.toLowerCase() !== currentAddress.toLowerCase();
 
     // Check if preferences changed (dirty state)
     const prefsChanged = profile && (profile.preferred_chain_id !== selectedChainId || profile.preferred_asset_address?.toLowerCase() !== selectedAsset?.address.toLowerCase());
 
     // Logic for Saving:
-    const isFamilyMismatch = selectedChain && selectedChain.family !== ChainFamily.EVM;
-    const canSave = (isDifferent || prefsChanged) && !isFamilyMismatch;
+    const isWalletMismatch =
+        (selectedChain?.family === ChainFamily.SOLANA && !solanaConnected) ||
+        (selectedChain?.family === ChainFamily.EVM && !isConnected);
+
+    const canSave = (isDifferent || prefsChanged) && !isWalletMismatch;
 
     // Grouping chains for dropdown
     const groupedChains = chainFamilies.map(family => ({
@@ -374,7 +386,7 @@ function WalletsContent() {
                     <Link href="/me" className="p-2 rounded-full bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors">
                         <ArrowLeft size={20} />
                     </Link>
-                    <h1 className="text-2xl font-bold">Manage Wallets</h1>
+                    <h1 className="text-2xl font-bold">Manage Wallet</h1>
                 </div>
 
                 {message && (
@@ -394,10 +406,10 @@ function WalletsContent() {
                 <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-6">
                     <div>
                         <h2 className="text-lg font-bold flex items-center gap-2 mb-2">
-                            <Wallet className="text-blue-400" /> Wallet Preferences
+                            <Wallet className="text-blue-400" /> Wallet Settings
                         </h2>
                         <p className="text-zinc-400 text-sm">
-                            Configure your main wallet and preferred tip currency.
+                            Configure wallet, network and asset where you want to receive the tips
                         </p>
                     </div>
 
@@ -534,11 +546,11 @@ function WalletsContent() {
 
 
 
-                    <div className="border-t border-zinc-800 pt-6">
-                        <h3 className="text-sm font-bold text-zinc-300 mb-4">Connected Wallet</h3>
+                    <div>
+                        <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-4">Connected Wallet</h3>
                         <div className="flex flex-col gap-4">
                             {selectedChain?.family === ChainFamily.SOLANA ? (
-                                <CustomSolanaConnectButton />
+                                <CustomSolanaConnectButton onClick={() => setIsSolanaModalOpen(true)} />
                             ) : (
                                 <ConnectButton.Custom>
                                     {({
@@ -610,7 +622,10 @@ function WalletsContent() {
                             <button
                                 onClick={handleSaveWallet}
                                 disabled={saving || !canSave}
-                                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${saving || !canSave
+                                    ? "bg-zinc-800 text-zinc-400 cursor-not-allowed opacity-50"
+                                    : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20"
+                                    }`}
                             >
                                 {saving ? (
                                     <span className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
@@ -633,19 +648,23 @@ function WalletsContent() {
                     </div>
                 </div>
 
+                {/* Custom Solana Wallet Modal */}
+                <CustomSolanaWalletModal
+                    isOpen={isSolanaModalOpen}
+                    onClose={() => setIsSolanaModalOpen(false)}
+                />
             </div>
         </div>
     );
 }
 
-function CustomSolanaConnectButton() {
-    const { setVisible } = useWalletModal();
+function CustomSolanaConnectButton({ onClick }: { onClick: () => void }) {
     const { publicKey, connected, wallet } = useWallet();
 
     if (!connected) {
         return (
             <button
-                onClick={() => setVisible(true)}
+                onClick={onClick}
                 type="button"
                 className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg shadow-blue-900/20"
             >
@@ -656,7 +675,7 @@ function CustomSolanaConnectButton() {
 
     return (
         <button
-            onClick={() => setVisible(true)}
+            onClick={onClick}
             type="button"
             className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-center gap-3 transition-all hover:bg-zinc-900"
         >

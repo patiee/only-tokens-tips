@@ -19,10 +19,7 @@ export default function SolanaProvider({ children }: { children: React.ReactNode
     const endpoint = useMemo(() => clusterApiUrl(network), [network]);
 
     const wallets = useMemo(
-        () => [
-            new PhantomWalletAdapter(),
-            new SolflareWalletAdapter(),
-        ],
+        () => [],
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [network]
     );
