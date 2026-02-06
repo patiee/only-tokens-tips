@@ -11,6 +11,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@mysten/dapp-kit": "^1.0.1",
+    "@mysten/sui.js": "^0.54.1",
     "@radix-ui/themes": "^3.2.1",
     "@rainbow-me/rainbowkit": "^2.2.10",
     "@solana/wallet-adapter-base": "^0.9.27",
@@ -28,6 +30,7 @@
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "sats-connect": "^4.2.1",
     "viem": "^2.45.1",
     "wagmi": "^2.19.5"
   },

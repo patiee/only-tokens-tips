@@ -11,6 +11,12 @@ import { evmChains } from "@/config/generated-chains";
 import { allChains, chainFamilies, ChainFamily, CustomChainConfig, isValidAddress } from "@/config/chains";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { CustomSolanaWalletModal } from "@/components/CustomSolanaWalletModal";
+import { CustomEVMWalletModal } from "@/components/CustomEVMWalletModal";
+import { CustomBitcoinWalletModal } from "@/components/CustomBitcoinWalletModal";
+import { CustomSuiWalletModal } from "@/components/CustomSuiWalletModal";
+import { useBitcoinWallet } from "@/contexts/BitcoinWalletContext";
+import { useCurrentAccount, useDisconnectWallet } from "@mysten/dapp-kit";
+import { useDisconnect } from "wagmi";
 
 export type UserProfile = {
     username: string;
@@ -31,7 +37,17 @@ function WalletsContent() {
     const router = useRouter();
 
     const { address, isConnected } = useAccount();
+    const { disconnect: disconnectEVM } = useDisconnect();
     const { publicKey, connected: solanaConnected } = useWallet();
+
+    // Bitcoin
+    const { isConnected: btcConnected, address: btcAddress, disconnect: disconnectBtc, walletType: btcWalletType } = useBitcoinWallet();
+
+    // Sui
+    const currentSuiAccount = useCurrentAccount();
+    const { mutate: disconnectSui } = useDisconnectWallet();
+    const suiConnected = !!currentSuiAccount;
+    const suiAddress = currentSuiAccount?.address;
 
     // Preferences State
     const [selectedChainId, setSelectedChainId] = useState<number>(evmChains[0]?.id || 1);
@@ -39,6 +55,9 @@ function WalletsContent() {
 
     // Modal State
     const [isSolanaModalOpen, setIsSolanaModalOpen] = useState(false);
+    const [isEVMModalOpen, setIsEVMModalOpen] = useState(false);
+    const [isBitcoinModalOpen, setIsBitcoinModalOpen] = useState(false);
+    const [isSuiModalOpen, setIsSuiModalOpen] = useState(false);
     const [chainDropdownOpen, setChainDropdownOpen] = useState(false);
     const [assetDropdownOpen, setAssetDropdownOpen] = useState(false);
     const [chainSearch, setChainSearch] = useState("");
@@ -279,6 +298,14 @@ function WalletsContent() {
             if (solanaConnected && publicKey) {
                 addressToSave = publicKey.toBase58();
             }
+        } else if (selectedChain?.family === ChainFamily.BITCOIN) {
+            if (btcConnected && btcAddress) {
+                addressToSave = btcAddress;
+            }
+        } else if (selectedChain?.family === ChainFamily.SUI) {
+            if (suiConnected && suiAddress) {
+                addressToSave = suiAddress;
+            }
         } else if (selectedChain?.family === ChainFamily.EVM) {
             if (isConnected && address) {
                 addressToSave = address;
@@ -355,9 +382,16 @@ function WalletsContent() {
     );
 
     // Determine current connected address based on selected family
-    const currentAddress = selectedChain?.family === ChainFamily.SOLANA
-        ? (solanaConnected && publicKey ? publicKey.toBase58() : null)
-        : (isConnected && address ? address : null);
+    let currentAddress: string | undefined | null = null;
+    if (selectedChain?.family === ChainFamily.SOLANA) {
+        currentAddress = solanaConnected && publicKey ? publicKey.toBase58() : null;
+    } else if (selectedChain?.family === ChainFamily.BITCOIN) {
+        currentAddress = btcConnected && btcAddress ? btcAddress : null;
+    } else if (selectedChain?.family === ChainFamily.SUI) {
+        currentAddress = suiConnected && suiAddress ? suiAddress : null;
+    } else if (selectedChain?.family === ChainFamily.EVM) {
+        currentAddress = isConnected && address ? address : null;
+    }
 
     // Check if wallet matches profile
     const isDifferent = profile && currentAddress && profile.eth_address.toLowerCase() !== currentAddress.toLowerCase();
@@ -368,9 +402,21 @@ function WalletsContent() {
     // Logic for Saving:
     const isWalletMismatch =
         (selectedChain?.family === ChainFamily.SOLANA && !solanaConnected) ||
+        (selectedChain?.family === ChainFamily.BITCOIN && !btcConnected) ||
+        (selectedChain?.family === ChainFamily.SUI && !suiConnected) ||
         (selectedChain?.family === ChainFamily.EVM && !isConnected);
 
-    const canSave = (isDifferent || prefsChanged) && !isWalletMismatch;
+    // Allow saving if:
+    // 1. Wallets match (connected and verified)
+    // 2. OR: We are NOT connected, but the currently saved address is valid for the target chain (e.g. switching EVM chains), AND we are not trying to change the address itself.
+    const savedAddressCompatible = profile?.eth_address && selectedChain && isValidAddress(profile.eth_address, selectedChain.family);
+
+    // We can save if:
+    // - There is a difference to save (address or prefs)
+    // - AND:
+    //   - We are connected correctly (!isWalletMismatch)
+    //   - OR we are just changing preferences and the saved address is compatible (offline update)
+    const canSave = (isDifferent || prefsChanged) && (!isWalletMismatch || (prefsChanged && !isDifferent && savedAddressCompatible));
 
     // Grouping chains for dropdown
     const groupedChains = chainFamilies.map(family => ({
@@ -547,76 +593,33 @@ function WalletsContent() {
 
 
                     <div>
-                        <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-4">Connected Wallet</h3>
+                        <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-4">Saved Wallet Address</h3>
+                        {profile?.eth_address ? (
+                            <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 mb-6 flex items-center justify-between">
+                                <div className="flex flex-col">
+                                    <span className="text-xs text-zinc-500 mb-1">Current Saved Address</span>
+                                    <span className="font-mono text-sm text-white break-all">{profile.eth_address}</span>
+                                </div>
+                                <div className="h-8 w-8 rounded-full bg-green-500/10 flex items-center justify-center">
+                                    <CheckCircle size={16} className="text-green-500" />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 mb-6 text-zinc-500 text-sm">
+                                No wallet address saved yet.
+                            </div>
+                        )}
+
+                        <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-4">Update Wallet Address</h3>
                         <div className="flex flex-col gap-4">
                             {selectedChain?.family === ChainFamily.SOLANA ? (
                                 <CustomSolanaConnectButton onClick={() => setIsSolanaModalOpen(true)} />
+                            ) : selectedChain?.family === ChainFamily.BITCOIN ? (
+                                <CustomBitcoinConnectButton onClick={() => setIsBitcoinModalOpen(true)} />
+                            ) : selectedChain?.family === ChainFamily.SUI ? (
+                                <CustomSuiConnectButton onClick={() => setIsSuiModalOpen(true)} />
                             ) : (
-                                <ConnectButton.Custom>
-                                    {({
-                                        account,
-                                        chain,
-                                        openAccountModal,
-                                        openChainModal,
-                                        openConnectModal,
-                                        authenticationStatus,
-                                        mounted,
-                                    }) => {
-                                        const ready = mounted && authenticationStatus !== 'loading';
-                                        const connected =
-                                            ready &&
-                                            account &&
-                                            chain &&
-                                            (!authenticationStatus ||
-                                                authenticationStatus === 'authenticated');
-
-                                        return (
-                                            <div
-                                                {...(!ready && {
-                                                    'aria-hidden': true,
-                                                    'style': {
-                                                        opacity: 0,
-                                                        pointerEvents: 'none',
-                                                        userSelect: 'none',
-                                                    },
-                                                })}
-                                                className="w-full"
-                                            >
-                                                {(() => {
-                                                    if (!connected) {
-                                                        return (
-                                                            <button onClick={openConnectModal} type="button" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg shadow-blue-900/20">
-                                                                Connect Wallet
-                                                            </button>
-                                                        );
-                                                    }
-
-                                                    if (chain.unsupported) {
-                                                        return (
-                                                            <button onClick={openChainModal} type="button" className="w-full bg-red-500 hover:bg-red-400 text-white font-bold py-3 px-4 rounded-xl transition-all">
-                                                                Wrong network
-                                                            </button>
-                                                        );
-                                                    }
-
-                                                    return (
-                                                        <button onClick={openAccountModal} type="button" className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-center gap-3 transition-all hover:bg-zinc-900">
-                                                            {account.ensAvatar ? (
-                                                                <img src={account.ensAvatar} alt="ENS Avatar" className="w-6 h-6 rounded-full" />
-                                                            ) : (
-                                                                <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-[10px] font-bold">
-                                                                    {account.displayName ? account.displayName[0] : "W"}
-                                                                </div>
-                                                            )}
-                                                            <span className="font-medium text-xs break-all">{account.address}</span>
-                                                            <ChevronDown size={16} className="text-zinc-500" />
-                                                        </button>
-                                                    );
-                                                })()}
-                                            </div>
-                                        );
-                                    }}
-                                </ConnectButton.Custom>
+                                <CustomEVMConnectButton onClick={() => setIsEVMModalOpen(true)} />
                             )}
 
                             <button
@@ -640,18 +643,30 @@ function WalletsContent() {
                                 Connected wallet matches your current main wallet.
                             </p>
                         )}
-                        {isConnected && selectedChain?.family !== ChainFamily.EVM && !(selectedChain?.family === ChainFamily.SOLANA && solanaConnected) && (
+                        {isConnected && selectedChain?.family === ChainFamily.SOLANA && !solanaConnected && !canSave && (
                             <p className="text-xs text-amber-500 mt-4 text-center">
-                                Connection not supported for {selectedChain?.name}. Please connect a compatible wallet to save.
+                                Please connect a Solana wallet to save.
                             </p>
                         )}
                     </div>
                 </div>
 
-                {/* Custom Solana Wallet Modal */}
+                {/* Custom Wallet Modals */}
                 <CustomSolanaWalletModal
                     isOpen={isSolanaModalOpen}
                     onClose={() => setIsSolanaModalOpen(false)}
+                />
+                <CustomBitcoinWalletModal
+                    isOpen={isBitcoinModalOpen}
+                    onClose={() => setIsBitcoinModalOpen(false)}
+                />
+                <CustomSuiWalletModal
+                    isOpen={isSuiModalOpen}
+                    onClose={() => setIsSuiModalOpen(false)}
+                />
+                <CustomEVMWalletModal
+                    isOpen={isEVMModalOpen}
+                    onClose={() => setIsEVMModalOpen(false)}
                 />
             </div>
         </div>
@@ -683,6 +698,97 @@ function CustomSolanaConnectButton({ onClick }: { onClick: () => void }) {
                 {wallet?.adapter.icon ? <img src={wallet.adapter.icon} className="w-full h-full rounded-full" alt="Wallet" /> : "S"}
             </div>
             <span className="font-medium text-xs break-all">{publicKey?.toBase58()}</span>
+            <ChevronDown size={16} className="text-zinc-500" />
+        </button>
+    );
+}
+
+function CustomBitcoinConnectButton({ onClick }: { onClick: () => void }) {
+    const { isConnected, address, walletType } = useBitcoinWallet();
+
+    if (!isConnected) {
+        return (
+            <button
+                onClick={onClick}
+                type="button"
+                className="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg shadow-orange-900/20"
+            >
+                Connect Bitcoin Wallet
+            </button>
+        );
+    }
+
+    return (
+        <button
+            onClick={onClick}
+            type="button"
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-center gap-3 transition-all hover:bg-zinc-900"
+        >
+            <div className="w-6 h-6 rounded-full bg-gradient-to-r from-orange-500 to-yellow-500 flex items-center justify-center text-[10px] text-white">
+                B
+            </div>
+            <span className="font-medium text-xs break-all">{address}</span>
+            <ChevronDown size={16} className="text-zinc-500" />
+        </button>
+    );
+}
+
+function CustomSuiConnectButton({ onClick }: { onClick: () => void }) {
+    const currentAccount = useCurrentAccount();
+    const isConnected = !!currentAccount;
+
+    if (!isConnected) {
+        return (
+            <button
+                onClick={onClick}
+                type="button"
+                className="w-full bg-blue-500 hover:bg-blue-400 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg shadow-blue-900/20"
+            >
+                Connect Sui Wallet
+            </button>
+        );
+    }
+
+    return (
+        <button
+            onClick={onClick}
+            type="button"
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-center gap-3 transition-all hover:bg-zinc-900"
+        >
+            <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-400 to-cyan-300 flex items-center justify-center text-[10px] text-white">
+                S
+            </div>
+            <span className="font-medium text-xs break-all">{currentAccount?.address}</span>
+            <ChevronDown size={16} className="text-zinc-500" />
+        </button>
+    );
+}
+
+function CustomEVMConnectButton({ onClick }: { onClick: () => void }) {
+    const { isConnected, address } = useAccount();
+
+    if (!isConnected) {
+        return (
+            <button
+                onClick={onClick}
+                type="button"
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg shadow-blue-900/20"
+            >
+                Connect Wallet
+            </button>
+        );
+    }
+
+    return (
+        <button
+            onClick={onClick}
+            type="button"
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-center gap-3 transition-all hover:bg-zinc-900"
+        >
+            <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 flex items-center justify-center text-[10px] text-white font-bold">
+                E
+            </div>
+            <span className="font-medium text-xs break-all">{address}</span>
             <ChevronDown size={16} className="text-zinc-500" />
         </button>
     );
