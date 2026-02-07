@@ -1,12 +1,10 @@
-"use client";
-
 import { useState, useEffect, useMemo } from "react";
-import { useAccount, useSendTransaction, useBalance, useSwitchChain, useReadContracts, useWriteContract, useConfig, useDisconnect } from "wagmi";
+import { useAccount, useSendTransaction, useBalance, useSwitchChain, useReadContracts, useWriteContract, useConfig, useDisconnect, useGasPrice } from "wagmi";
 import { useWalletAuth } from "@/hooks/useWalletAuth";
 import { readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { parseEther, formatEther, erc20Abi } from "viem";
 import { mainnet, base } from "wagmi/chains";
-import { Check, ChevronDown, Wallet, Coins, AlertTriangle } from "lucide-react";
+import { Check, ChevronDown, Wallet, Coins, AlertTriangle, Settings, X } from "lucide-react";
 import { allChains, ChainFamily } from "@/config/chains";
 import { WalletNetworkSelector } from "./WalletNetworkSelector";
 import { WalletConnectButton } from "./WalletConnectButton";
@@ -53,6 +51,7 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
     const { disconnect: disconnectEVM } = useDisconnect();
     const { sendTransactionAsync } = useSendTransaction();
     const { writeContractAsync } = useWriteContract();
+    const { data: gasPriceData } = useGasPrice();
     const config = useConfig();
 
     // Auth Hook
@@ -71,6 +70,12 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
     const [senderName, setSenderName] = useState("");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+
+    // Transaction Settings State
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [slippageMode, setSlippageMode] = useState<"auto" | "custom">("auto");
+    const [customSlippage, setCustomSlippage] = useState("0.5"); // Default 0.5%
+    const [gasMode, setGasMode] = useState<"auto" | "fast" | "instant">("auto");
 
     // Selection State
     // Default to Ethereum (1)
@@ -195,6 +200,12 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
         // Hardcoded target chain: Base (8453)
         const targetChainId = 8453;
 
+        // Calculate Slippage (0.005 for 0.5%)
+        let slippageDecimal = "0.005"; // Default
+        if (slippageMode === "custom" && customSlippage) {
+            slippageDecimal = (parseFloat(customSlippage) / 100).toString();
+        }
+
         const params = new URLSearchParams({
             fromChain: selectedChainId.toString(),
             toChain: targetChainId.toString(),
@@ -205,6 +216,7 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
             fromAddress: currentAddress!,
             integrator: process.env.NEXT_PUBLIC_LIFI_INTEGRATOR || "stream-tips",
             fee: "0.01",
+            slippage: slippageDecimal,
         });
 
         const apiKey = process.env.NEXT_PUBLIC_LIFI_API_KEY;
@@ -240,11 +252,20 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
             }
         }
 
+        // Calculate Gas Price
+        let txGasPrice = undefined;
+        if (gasMode !== "auto" && gasPriceData) {
+            const multiplier = gasMode === "fast" ? 1.2 : 1.5; // Fast = +20%, Instant = +50%
+            const boostedGas = BigInt(Math.floor(Number(gasPriceData) * multiplier));
+            txGasPrice = boostedGas;
+        }
+
         onStatus("Sending Transaction...");
         const txHash = await sendTransactionAsync({
             to: quote.transactionRequest.to,
             data: quote.transactionRequest.data,
-            value: BigInt(quote.transactionRequest.value)
+            value: BigInt(quote.transactionRequest.value),
+            gasPrice: txGasPrice, // Use boosted gas price if set
         });
 
         onSuccess({
@@ -279,7 +300,9 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
     };
 
     return (
-        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-8">
+        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-8 relative">
+
+
             {/* Top Row: Network & Amount + Desktop Preview */}
             <div className="flex flex-col lg:flex-row gap-8 items-start lg:items-end">
 
@@ -379,6 +402,79 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
 
                 {/* Actions */}
                 <div className="space-y-4 pt-4">
+                    {/* Settings Button (Above Connected Status) */}
+                    <div className="flex justify-end">
+                        <button
+                            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all duration-200 text-xs font-bold uppercase tracking-wider ${isSettingsOpen ? "bg-zinc-800 border-white/20 text-white" : "bg-zinc-900/40 border-white/5 text-zinc-500 hover:bg-zinc-800 hover:text-white"}`}
+                        >
+                            <Settings size={14} />
+                            Transaction Settings
+                        </button>
+                    </div>
+
+                    {/* Settings Panel (Expandable) */}
+                    {isSettingsOpen && (
+                        <div className="w-full bg-zinc-900/50 border border-white/5 rounded-2xl p-5 animate-in fade-in slide-in-from-top-2 space-y-4">
+                            {/* Slippage */}
+                            <div>
+                                <div className="flex justify-between items-center mb-2">
+                                    <label className="text-xs font-bold text-zinc-500 uppercase">Slippage Tolerance</label>
+                                    <span className="text-xs font-mono text-zinc-400">{slippageMode === "auto" ? "0.5%" : `${customSlippage}%`}</span>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setSlippageMode("auto")}
+                                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-all ${slippageMode === "auto" ? "bg-purple-500 text-white border-purple-500" : "bg-zinc-800 border-white/5 text-zinc-400 hover:bg-zinc-700"}`}
+                                    >
+                                        AUTO
+                                    </button>
+                                    <div className="flex-1 relative">
+                                        <input
+                                            type="number"
+                                            placeholder="0.5"
+                                            value={customSlippage}
+                                            onChange={(e) => {
+                                                setSlippageMode("custom");
+                                                setCustomSlippage(e.target.value);
+                                            }}
+                                            className={`w-full py-1.5 px-2 text-xs font-bold rounded-lg border bg-zinc-800 text-white focus:outline-none transition-all text-right pr-6 ${slippageMode === "custom" ? "border-purple-500" : "border-white/5"}`}
+                                        />
+                                        <span className="absolute right-2 top-1.5 text-xs text-zinc-500 pointer-events-none">%</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Gas */}
+                            <div>
+                                <div className="flex justify-between items-center mb-2">
+                                    <label className="text-xs font-bold text-zinc-500 uppercase">Gas Price</label>
+                                    <span className="text-xs font-mono text-zinc-400 uppercase">{gasMode}</span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <button
+                                        onClick={() => setGasMode("auto")}
+                                        className={`py-1.5 text-xs font-bold rounded-lg border transition-all ${gasMode === "auto" ? "bg-green-500 text-white border-green-500" : "bg-zinc-800 border-white/5 text-zinc-400 hover:bg-zinc-700"}`}
+                                    >
+                                        AUTO
+                                    </button>
+                                    <button
+                                        onClick={() => setGasMode("fast")}
+                                        className={`py-1.5 text-xs font-bold rounded-lg border transition-all ${gasMode === "fast" ? "bg-blue-500 text-white border-blue-500" : "bg-zinc-800 border-white/5 text-zinc-400 hover:bg-zinc-700"}`}
+                                    >
+                                        FAST
+                                    </button>
+                                    <button
+                                        onClick={() => setGasMode("instant")}
+                                        className={`py-1.5 text-xs font-bold rounded-lg border transition-all ${gasMode === "instant" ? "bg-red-500 text-white border-red-500" : "bg-zinc-800 border-white/5 text-zinc-400 hover:bg-zinc-700"}`}
+                                    >
+                                        INSTANT
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <div className={`w-full transition-all duration-300 ${isConnected && currentAddress ? "flex items-center justify-between px-5 py-4 bg-zinc-900/40 rounded-2xl border border-white/5 backdrop-blur-sm" : ""}`}>
                         {isConnected && currentAddress ? (
                             <>
@@ -461,5 +557,5 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
             />
         </div>
     );
-
 }
+
