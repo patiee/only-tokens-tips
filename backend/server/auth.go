@@ -185,14 +185,14 @@ func (s *Service) HandleOAuthCallback(c *gin.Context, provider string) {
 		}
 
 		// Link Logic
-		err = s.db.LinkProvider(userID, provider, userProfile.ID)
+		err = s.db.LinkProvider(userID, provider, userProfile.ID, userProfile.Name)
 		if err != nil {
 			s.logger.Printf("Failed to link provider: %v", err)
-			c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/me/settings?error=link_failed_or_taken")
+			c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/me/settings?error=link_failed_or_taken", "http://localhost:3000"))
 			return
 		}
 
-		c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/me/settings?success=linked")
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/me/settings?success=linked", "http://localhost:3000"))
 		return
 	}
 

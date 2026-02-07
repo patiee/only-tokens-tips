@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useAccount } from "wagmi";
 import { LifiTip } from "@/components/LifiTip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { ArrowLeft, ExternalLink, Globe, Twitter } from "lucide-react";
+import { ArrowLeft, ExternalLink, Globe, Twitter, Twitch } from "lucide-react";
 import Link from "next/link";
 
 // Define interface matching backend/db/model/model.go
@@ -25,6 +25,7 @@ interface PublicUserProfile {
     widget_user_color?: string;
     widget_amount_color?: string;
     widget_message_color?: string;
+    twitch_username?: string;
 }
 
 export default function TipPage() {
@@ -184,14 +185,19 @@ export default function TipPage() {
                                         </p>
                                     )}
 
-                                    {/* Social Links / Connected Providers */}
                                     {user.connected_providers && user.connected_providers.length > 0 && (
-                                        <div className="flex items-center justify-center md:justify-start gap-3 mt-4">
+                                        <div className="flex items-center justify-center md:justify-start gap-3 pt-4">
                                             {user.connected_providers.includes('twitch') && (
-                                                <div className="px-3 py-1 bg-[#9146FF]/10 text-[#a970ff] border border-[#9146FF]/20 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_10px_-3px_#9146FF]">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-[#9146FF]"></span>
+                                                <Link
+                                                    href={`https://twitch.tv/${user.twitch_username || user.username}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="px-4 py-1.5 bg-gradient-to-r from-[#9146FF] to-[#6441a5] text-white border border-[#9146FF]/50 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-[0_0_15px_-3px_#9146FF] hover:shadow-[0_0_20px_-3px_#9146FF] transition-all cursor-pointer relative overflow-hidden group/badge hover:scale-105"
+                                                >
+                                                    <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover/badge:translate-x-[100%] transition-transform duration-700 ease-in-out skew-x-12"></div>
+                                                    <Twitch size={14} className="fill-current" />
                                                     Twitch Verified
-                                                </div>
+                                                </Link>
                                             )}
                                             {user.connected_providers.includes('kick') && (
                                                 <div className="px-3 py-1 bg-[#53FC18]/5 text-[#53FC18] border border-[#53FC18]/20 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_10px_-3px_#53FC18]">

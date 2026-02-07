@@ -74,20 +74,32 @@ func (d *Database) GetUserByProviderID(provider, providerID string) (user *model
 	return
 }
 
-func (d *Database) LinkProvider(userID uint, provider, providerID string) error {
+func (d *Database) LinkProvider(userID uint, provider, providerID, providerUsername string) error {
 	var column string
+	var usernameColumn string
+
 	switch provider {
 	case "google":
 		column = "google_id"
 	case "twitch":
 		column = "twitch_id"
+		usernameColumn = "twitch_username"
 	case "kick":
 		column = "kick_id"
+	case "tiktok":
+		column = "tiktok_id"
 	default:
 		return fmt.Errorf("unsupported provider for linking: %s", provider)
 	}
 
-	return d.conn.Model(&model.User{}).Where("id = ?", userID).Update(column, providerID).Error
+	updates := map[string]interface{}{
+		column: providerID,
+	}
+	if usernameColumn != "" {
+		updates[usernameColumn] = providerUsername
+	}
+
+	return d.conn.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
 }
 
 func (d *Database) CreateUser(user *model.User) error {

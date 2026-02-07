@@ -406,6 +406,7 @@ func (s *Server) HandleMe(c *gin.Context) {
 		"widget_user_color":       user.WidgetUserColor,
 		"widget_amount_color":     user.WidgetAmountColor,
 		"widget_message_color":    user.WidgetMessageColor,
+		"twitch_username":         user.TwitchUsername,
 	})
 }
 
@@ -444,6 +445,7 @@ func (s *Server) HandleGetUser(c *gin.Context) {
 		"widget_user_color":       user.WidgetUserColor,
 		"widget_amount_color":     user.WidgetAmountColor,
 		"widget_message_color":    user.WidgetMessageColor,
+		"twitch_username":         user.TwitchUsername,
 	})
 }
 

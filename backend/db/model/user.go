@@ -24,5 +24,6 @@ type User struct {
 	BackgroundURL      string    `json:"background_url"`
 	GoogleID           *string   `json:"google_id" gorm:"uniqueIndex"`
 	TwitchID           *string   `json:"twitch_id" gorm:"uniqueIndex"`
+	TwitchUsername     *string   `json:"twitch_username"`
 	TikTokID           *string   `json:"tiktok_id" gorm:"uniqueIndex"`
 }
