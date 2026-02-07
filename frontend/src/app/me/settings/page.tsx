@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 // ... (Previous imports)
 import { User, Image as ImageIcon, FileText, Check, Save, Loader2, Twitch, Monitor, Chrome, AlertTriangle, ArrowLeft, Upload } from "lucide-react";
 
@@ -148,17 +149,16 @@ export default function SettingsPage() {
             <div className="fixed inset-0 bg-gradient-to-br from-purple-900/20 via-black to-blue-900/10 pointer-events-none" />
 
             <div className="max-w-4xl mx-auto space-y-8 p-6 md:p-12 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <header>
-                    <button
-                        onClick={() => router.push("/me")}
-                        className="mb-6 flex items-center gap-2 text-sm font-medium text-zinc-500 hover:text-white transition-colors"
-                    >
-                        <ArrowLeft size={16} /> Back to Dashboard
-                    </button>
-                    <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-400">
-                        Account Settings
-                    </h1>
-                    <p className="text-zinc-400 mt-2">Manage your profile details and social connections.</p>
+                <header className="space-y-4">
+                    <div className="flex items-center gap-4">
+                        <Link href="/me" className="p-2 rounded-full bg-zinc-900/50 hover:bg-zinc-800 border border-white/5 text-zinc-400 hover:text-white transition-colors">
+                            <ArrowLeft size={20} />
+                        </Link>
+                        <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-400">
+                            Account Settings
+                        </h1>
+                    </div>
+                    <p className="text-zinc-400 pl-[52px]">Manage your profile details and social connections.</p>
                 </header>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -293,7 +293,7 @@ export default function SettingsPage() {
                                 {isConnected('google') ? (
                                     <button disabled className="w-full flex items-center justify-between p-3 rounded-xl bg-black/40 border border-white/5 text-zinc-500 text-sm font-bold cursor-default">
                                         <div className="flex items-center gap-3">
-                                            <Chrome size={18} /> Google Connected
+                                            <Chrome size={18} /> Google
                                         </div>
                                         <Check size={16} className="text-green-500" />
                                     </button>
@@ -306,7 +306,7 @@ export default function SettingsPage() {
                                 {isConnected('twitch') ? (
                                     <button disabled className="w-full flex items-center justify-between p-3 rounded-xl bg-black/40 border border-white/5 text-zinc-500 text-sm font-bold cursor-default">
                                         <div className="flex items-center gap-3">
-                                            <Twitch size={18} /> Twitch Connected
+                                            <Twitch size={18} /> Twitch
                                         </div>
                                         <Check size={16} className="text-green-500" />
                                     </button>
@@ -316,18 +316,26 @@ export default function SettingsPage() {
                                     </button>
                                 )}
 
-                                {isConnected('kick') ? (
+                                {/* {isConnected('tiktok') ? (
                                     <button disabled className="w-full flex items-center justify-between p-3 rounded-xl bg-black/40 border border-white/5 text-zinc-500 text-sm font-bold cursor-default">
                                         <div className="flex items-center gap-3">
-                                            <Monitor size={18} /> Kick Connected
+                                            <div className="w-5 h-5 flex items-center justify-center bg-black rounded-full border border-white/10">
+                                                <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
+                                                </svg>
+                                            </div> TikTok
                                         </div>
                                         <Check size={16} className="text-green-500" />
                                     </button>
                                 ) : (
-                                    <button onClick={() => handleSocialConnect("kick")} className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-900/50 border border-white/5 hover:bg-[#53FC18]/10 hover:border-[#53FC18]/30 hover:text-[#53FC18] transition-all text-sm font-medium text-zinc-300">
-                                        <Monitor className="text-[#53FC18]" size={18} /> Connect Kick
+                                    <button onClick={() => handleSocialConnect("tiktok")} className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-900/50 border border-white/5 hover:bg-black/50 hover:border-white/20 hover:text-white transition-all text-sm font-medium text-zinc-300">
+                                        <div className="w-5 h-5 flex items-center justify-center bg-black rounded-full border border-white/10">
+                                            <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
+                                            </svg>
+                                        </div> Connect TikTok
                                     </button>
-                                )}
+                                )} */}
                             </div>
                         </div>
                     </div>

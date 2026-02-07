@@ -25,8 +25,8 @@ func (s *Service) HandleOAuthLogin(c *gin.Context, provider string) {
 		config = googleConfig
 	case "twitch":
 		config = twitchConfig
-	case "kick":
-		config = kickConfig
+	case "tiktok":
+		config = tiktokConfig
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid provider"})
 		return
@@ -119,11 +119,20 @@ func (s *Service) ValidateLinkState(state string) (uint, error) {
 		return 0, fmt.Errorf("invalid state signature")
 	}
 
-	// Check timestamp (e.g. 10 mins expiration)
-	// ... logic ...
+	// Check timestamp (15 mins expiration)
+	var timestamp int64
+	if _, err := fmt.Sscanf(timestampStr, "%d", &timestamp); err != nil {
+		return 0, fmt.Errorf("invalid timestamp format")
+	}
+
+	if time.Now().Unix() > timestamp+900 {
+		return 0, fmt.Errorf("link request expired")
+	}
 
 	var userID uint
-	fmt.Sscanf(userIDStr, "%d", &userID)
+	if _, err := fmt.Sscanf(userIDStr, "%d", &userID); err != nil {
+		return 0, fmt.Errorf("invalid user id format")
+	}
 	return userID, nil
 }
 
@@ -131,7 +140,10 @@ func (s *Service) HandleOAuthCallback(c *gin.Context, provider string) {
 	state := c.Query("state")
 	code := c.Query("code")
 
-	if state != oauthState {
+	s.logger.Printf("Debug OAuth: Received state='%s', Expected oauthState='%s'", state, oauthState)
+
+	if !strings.HasPrefix(state, "link:") && state != oauthState {
+		s.logger.Printf("Debug OAuth: State mismatch. Prefix check='%v', Equality check='%v'", strings.HasPrefix(state, "link:"), state == oauthState)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid state"})
 		return
 	}
@@ -142,8 +154,8 @@ func (s *Service) HandleOAuthCallback(c *gin.Context, provider string) {
 		config = googleConfig
 	case "twitch":
 		config = twitchConfig
-	case "kick":
-		config = kickConfig
+	case "tiktok":
+		config = tiktokConfig
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid provider"})
 		return
@@ -266,23 +278,27 @@ func (s *Service) fetchUserProfile(provider, accessToken string, logger interfac
 			user.Avatar = u.ProfileImageUrl
 		}
 
-	case "kick":
-		req, _ := http.NewRequest("GET", "https://api.kick.com/v1/users", nil) // Verify endpoint
+	case "tiktok":
+		req, _ := http.NewRequest("GET", "https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,avatar_url,display_name", nil)
 		req.Header.Set("Authorization", "Bearer "+accessToken)
 		resp, err := client.Do(req)
 		if err != nil {
 			return nil, err
 		}
 		defer resp.Body.Close()
-		// Assuming generic structure for now
-		var kickUser model.KickUser
-		if err := json.NewDecoder(resp.Body).Decode(&kickUser); err != nil {
+		var tiktokResp model.TikTokResp
+		if err := json.NewDecoder(resp.Body).Decode(&tiktokResp); err != nil {
 			return nil, err
 		}
-		user.ID = kickUser.ID.String()
-		user.Email = kickUser.Email
-		user.Name = kickUser.Username
-		user.Avatar = kickUser.ProfilePic
+		if tiktokResp.Error.Code != "ok" {
+			return nil, fmt.Errorf("tiktok api error: %s", tiktokResp.Error.Message)
+		}
+		user.ID = tiktokResp.Data.User.OpenID
+		user.Name = tiktokResp.Data.User.DisplayName
+		user.Avatar = tiktokResp.Data.User.AvatarURL
+		// TikTok basic scope might not give email, leave empty or handle if needed
+		// user.Email = ""
+
 	}
 
 	return &user, nil

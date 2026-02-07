@@ -22,7 +22,7 @@ import (
 var (
 	googleConfig *oauth2.Config
 	twitchConfig *oauth2.Config
-	kickConfig   *oauth2.Config
+	tiktokConfig *oauth2.Config
 	oauthState   = "random-string-verification" // In prod, use random state per request
 	minioClient  *minio.Client
 )
@@ -106,13 +106,13 @@ func (s *Server) Start(port string) {
 	r.GET("/auth/google/callback", func(c *gin.Context) { s.service.HandleOAuthCallback(c, "google") })
 	r.GET("/auth/twitch/login", func(c *gin.Context) { s.service.HandleOAuthLogin(c, "twitch") })
 	r.GET("/auth/twitch/callback", func(c *gin.Context) { s.service.HandleOAuthCallback(c, "twitch") })
-	r.GET("/auth/kick/login", func(c *gin.Context) { s.service.HandleOAuthLogin(c, "kick") })
-	r.GET("/auth/kick/callback", func(c *gin.Context) { s.service.HandleOAuthCallback(c, "kick") })
+	r.GET("/auth/tiktok/login", func(c *gin.Context) { s.service.HandleOAuthLogin(c, "tiktok") })
+	r.GET("/auth/tiktok/callback", func(c *gin.Context) { s.service.HandleOAuthCallback(c, "tiktok") })
 
 	// Link Routes
 	r.GET("/auth/google/link", func(c *gin.Context) { s.service.HandleOAuthLogin(c, "google") })
 	r.GET("/auth/twitch/link", func(c *gin.Context) { s.service.HandleOAuthLogin(c, "twitch") })
-	r.GET("/auth/kick/link", func(c *gin.Context) { s.service.HandleOAuthLogin(c, "kick") })
+	r.GET("/auth/tiktok/link", func(c *gin.Context) { s.service.HandleOAuthLogin(c, "tiktok") })
 
 	// API Routes
 	api := r.Group("/api")
@@ -216,8 +216,8 @@ type Config struct {
 	GoogleClientSecret string
 	TwitchClientID     string
 	TwitchClientSecret string
-	KickClientID       string
-	KickClientSecret   string
+	TikTokClientID     string
+	TikTokClientSecret string
 	JWTSecret          string
 	CertFile           string
 	KeyFile            string
@@ -271,15 +271,15 @@ func (s *Server) InitOAuth() {
 		Endpoint:     twitch.Endpoint,
 	}
 
-	// Kick
-	kickConfig = &oauth2.Config{
-		ClientID:     s.config.KickClientID,
-		ClientSecret: s.config.KickClientSecret,
-		RedirectURL:  "https://localhost:8080/auth/kick/callback",
-		Scopes:       []string{"user:read"}, // Verify scope in Kick docs
+	// TikTok
+	tiktokConfig = &oauth2.Config{
+		ClientID:     s.config.TikTokClientID,
+		ClientSecret: s.config.TikTokClientSecret,
+		RedirectURL:  "https://localhost:8080/auth/tiktok/callback",
+		Scopes:       []string{"user.info.basic"}, // Basic user info scope
 		Endpoint: oauth2.Endpoint{
-			AuthURL:  "https://id.kick.com/oauth/authorize", // Verify this
-			TokenURL: "https://id.kick.com/oauth/token",     // Verify this
+			AuthURL:  "https://www.tiktok.com/v2/oauth/authorize/",
+			TokenURL: "https://open.tiktokapis.com/v2/oauth/token/",
 		},
 	}
 }
@@ -384,8 +384,8 @@ func (s *Server) HandleMe(c *gin.Context) {
 	if user.TwitchID != nil || (user.Provider == "twitch" && user.ProviderID != "") {
 		connectedProviders = append(connectedProviders, "twitch")
 	}
-	if user.KickID != nil || (user.Provider == "kick" && user.ProviderID != "") {
-		connectedProviders = append(connectedProviders, "kick")
+	if user.TikTokID != nil || (user.Provider == "tiktok" && user.ProviderID != "") {
+		connectedProviders = append(connectedProviders, "tiktok")
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -424,8 +424,8 @@ func (s *Server) HandleGetUser(c *gin.Context) {
 	if user.TwitchID != nil || (user.Provider == "twitch" && user.ProviderID != "") {
 		connectedProviders = append(connectedProviders, "twitch")
 	}
-	if user.KickID != nil || (user.Provider == "kick" && user.ProviderID != "") {
-		connectedProviders = append(connectedProviders, "kick")
+	if user.TikTokID != nil || (user.Provider == "tiktok" && user.ProviderID != "") {
+		connectedProviders = append(connectedProviders, "tiktok")
 	}
 
 	c.JSON(http.StatusOK, gin.H{

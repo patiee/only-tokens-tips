@@ -59,9 +59,13 @@ function AuthContent() {
         }
 
         // Check for existing session (and prevent redirect if we are in signup flow)
+        // Check for existing session
         const storedToken = localStorage.getItem("user_token");
         const signupToken = searchParams.get("signup_token");
+
         if (storedToken && !signupToken && !error && !token) {
+            // Verify token validity (optional: could just trust existence for speed and let /me handle 401)
+            // For better UX, let's just redirect. If invalid, /me will redirect back.
             router.replace("/me");
             return;
         }
@@ -162,12 +166,17 @@ function AuthContent() {
                                 <Twitch className="w-5 h-5" /> Continue with Twitch
                             </button>
 
-                            <button
-                                onClick={() => handleSocialLogin("kick")}
-                                className="w-full flex items-center justify-center gap-3 p-4 rounded-xl bg-[#53FC18] text-black hover:bg-[#42cf12] transition-all font-bold shadow-lg shadow-green-900/20 hover:scale-[1.02] active:scale-[0.98]"
+                            {/* <button
+                                onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/tiktok/login`}
+                                className="w-full flex items-center justify-center space-x-3 bg-black/50 hover:bg-black/70 border border-white/10 hover:border-white/20 text-white p-4 rounded-xl transition-all duration-300 group backdrop-blur-sm"
                             >
-                                <Monitor className="w-5 h-5" /> Continue with Kick
-                            </button>
+                                <div className="p-2 bg-black rounded-full group-hover:scale-110 transition-transform">
+                                    <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
+                                    </svg>
+                                </div>
+                                <span className="font-medium">Continue with TikTok</span>
+                            </button> */}
 
                             <button
                                 onClick={() => handleSocialLogin("google")}
