@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -166,8 +168,12 @@ func (s *Server) HandleUpload(c *gin.Context) {
 	tokenString := authHeader[7:]
 	_, err := s.service.ValidateSessionToken(tokenString)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
-		return
+		// Try validating as signup token
+		_, errSignup := s.service.ValidateSignupToken(tokenString)
+		if errSignup != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			return
+		}
 	}
 
 	// Single file
@@ -226,6 +232,7 @@ type Config struct {
 	MinIOAccessKeyID   string
 	MinIOSecretKey     string
 	MinIOUseSSL        bool
+	EthRPCURL          string
 }
 
 type Server struct {
@@ -304,10 +311,44 @@ func (s *Server) HandleSignup(c *gin.Context) {
 		return
 	}
 
-	// Validate Username (Basic check)
-	if len(req.Username) < 3 || len(req.Username) > 20 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Username must be between 3 and 20 characters"})
-		return
+	// Validate Username
+	if strings.Contains(req.Username, ".") {
+		// ENS Check
+		resolvedAddr, err := s.service.ResolveENS(req.Username)
+		if err != nil {
+			if err == ErrENSNotFound {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "ENS name not found"})
+			} else {
+				s.logger.Printf("ENS resolution failed: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resolve ENS name"})
+			}
+			return
+		}
+
+		// Verify ownership (case insensitive comparison)
+		walletToCheck := claims.WalletAddress
+		if walletToCheck == "" {
+			walletToCheck = req.WalletAddress
+		}
+
+		if !strings.EqualFold(resolvedAddr, walletToCheck) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You do not own this ENS name"})
+			return
+		}
+
+	} else {
+		// Regular Username Validation
+		// Alphanumeric + special chars allowed by regex, no dots
+		// Regex: ^[a-zA-Z0-9!@#$%^&*()]+$
+		match, _ := regexp.MatchString(`^[a-zA-Z0-9!@#$%^&*()]+$`, req.Username)
+		if !match {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Username contains invalid characters"})
+			return
+		}
+		if len(req.Username) < 3 || len(req.Username) > 20 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Username must be between 3 and 20 characters"})
+			return
+		}
 	}
 
 	// We pass 0 as existing userID because this is a new user
@@ -324,16 +365,24 @@ func (s *Server) HandleSignup(c *gin.Context) {
 		walletAddr = req.WalletAddress
 	}
 
+	avatar := req.AvatarURL
+	if avatar == "" {
+		avatar = claims.AvatarURL
+	}
+
 	newUser, sessionToken, err := s.service.RegisterUser(
 		req.Username,
 		claims.Provider,
 		claims.ProviderID,
 		claims.Email,
-		claims.AvatarURL,
+		avatar,
 		walletAddr,
 		req.MainWallet,
 		req.PreferredChainID,
 		req.PreferredAssetAddress,
+		req.Description,
+		req.BackgroundURL,
+		req.TwitterHandle,
 	)
 
 	if err != nil {

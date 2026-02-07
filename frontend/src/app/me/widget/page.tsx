@@ -15,6 +15,50 @@ interface WidgetSettings {
     widget_token?: string;
 }
 
+const ColorPicker = ({ label, value, onChange, presets = [] }: { label: string, value: string, onChange: (val: string) => void, presets?: string[] }) => (
+    <div className="space-y-3">
+        <label className="text-sm font-bold text-zinc-400 uppercase tracking-wider">{label}</label>
+        {presets.length > 0 && (
+            <div className="grid grid-cols-5 gap-2 mb-3">
+                {presets.map((c, i) => (
+                    <button
+                        key={i}
+                        onClick={() => onChange(c)}
+                        className={`w-full aspect-square rounded-lg border-2 transition-all relative overflow-hidden ${value === c ? "border-purple-500 scale-110 shadow-lg shadow-purple-900/20" : "border-zinc-800 hover:border-zinc-600"}`}
+                        style={{ backgroundColor: c === "#00000000" ? "transparent" : c }}
+                        title={c === "#00000000" ? "Transparent" : c}
+                    >
+                        {c === "#00000000" && (
+                            <div className="absolute inset-0 bg-checkerboard opacity-50" style={{ backgroundImage: "conic-gradient(#333 90deg, transparent 90deg)", backgroundSize: "8px 8px" }} />
+                        )}
+                    </button>
+                ))}
+            </div>
+        )}
+        <div className="flex items-center gap-3 bg-zinc-950 p-2 rounded-xl border border-zinc-800">
+            <div className="relative w-10 h-10 shrink-0">
+                <input
+                    type="color"
+                    value={value.length === 9 ? "#000000" : value}
+                    onChange={(e) => onChange(e.target.value)}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                />
+                <div
+                    className="w-full h-full rounded-lg border border-zinc-700 shadow-sm"
+                    style={{ backgroundColor: value }}
+                />
+            </div>
+            <input
+                type="text"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="flex-1 bg-transparent text-sm font-mono text-zinc-300 outline-none uppercase placeholder:text-zinc-700"
+                placeholder="#000000"
+            />
+        </div>
+    </div>
+);
+
 function WidgetSettingsContent() {
     const [settings, setSettings] = useState<WidgetSettings>({
         tts_enabled: false,
@@ -90,7 +134,7 @@ function WidgetSettingsContent() {
         if (!token) return;
 
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/me/widget/regenerate`, {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/widget/regenerate`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -126,7 +170,7 @@ function WidgetSettingsContent() {
         if (!token) return;
 
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/me/widget`, {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/widget`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
@@ -154,50 +198,7 @@ function WidgetSettingsContent() {
         }
     };
 
-    const ColorPicker = ({ label, value, onChange, presets = [] }: { label: string, value: string, onChange: (val: string) => void, presets?: string[] }) => (
-        // ... (keep existing ColorPicker) ...
-        <div className="space-y-3">
-            <label className="text-sm font-bold text-zinc-400 uppercase tracking-wider">{label}</label>
-            {presets.length > 0 && (
-                <div className="grid grid-cols-5 gap-2 mb-3">
-                    {presets.map((c, i) => (
-                        <button
-                            key={i}
-                            onClick={() => onChange(c)}
-                            className={`w-full aspect-square rounded-lg border-2 transition-all relative overflow-hidden ${value === c ? "border-purple-500 scale-110 shadow-lg shadow-purple-900/20" : "border-zinc-800 hover:border-zinc-600"}`}
-                            style={{ backgroundColor: c === "#00000000" ? "transparent" : c }}
-                            title={c === "#00000000" ? "Transparent" : c}
-                        >
-                            {c === "#00000000" && (
-                                <div className="absolute inset-0 bg-checkerboard opacity-50" style={{ backgroundImage: "conic-gradient(#333 90deg, transparent 90deg)", backgroundSize: "8px 8px" }} />
-                            )}
-                        </button>
-                    ))}
-                </div>
-            )}
-            <div className="flex items-center gap-3 bg-zinc-950 p-2 rounded-xl border border-zinc-800">
-                <div className="relative w-10 h-10 shrink-0">
-                    <input
-                        type="color"
-                        value={value.length === 9 ? "#000000" : value}
-                        onChange={(e) => onChange(e.target.value)}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                    />
-                    <div
-                        className="w-full h-full rounded-lg border border-zinc-700 shadow-sm"
-                        style={{ backgroundColor: value }}
-                    />
-                </div>
-                <input
-                    type="text"
-                    value={value}
-                    onChange={(e) => onChange(e.target.value)}
-                    className="flex-1 bg-transparent text-sm font-mono text-zinc-300 outline-none uppercase placeholder:text-zinc-700"
-                    placeholder="#000000"
-                />
-            </div>
-        </div>
-    );
+
 
     if (loading) return (
         <div className="min-h-screen flex items-center justify-center bg-black text-white">
@@ -239,7 +240,7 @@ function WidgetSettingsContent() {
                 </div>
             )}
 
-            <div className="max-w-4xl mx-auto space-y-8 p-4 sm:p-8 relative z-10">
+            <div className="max-w-7xl mx-auto space-y-8 p-4 sm:p-8 relative z-10">
 
                 {/* Header */}
                 <div className="flex items-center gap-4">
@@ -365,10 +366,10 @@ function WidgetSettingsContent() {
                             <button
                                 onClick={handleSave}
                                 disabled={saving}
-                                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-white hover:bg-zinc-200 text-black rounded-xl font-bold uppercase tracking-wide transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {saving ? (
-                                    <span className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                    <span className="w-5 h-5 border-2 border-zinc-300 border-t-black rounded-full animate-spin" />
                                 ) : (
                                     <Save size={18} />
                                 )}

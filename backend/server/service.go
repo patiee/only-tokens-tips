@@ -12,8 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gorilla/websocket"
 	"github.com/patiee/backend/db"
@@ -24,7 +26,84 @@ import (
 var (
 	ErrTxNotFound     = errors.New("tx receipt not found")
 	ErrSenderMismatch = errors.New("sender mismatch")
+	ErrENSNotFound    = errors.New("ens name not found")
 )
+
+// Helper to resolve ENS name to address
+// Requires ETH_RPC_URL env var or uses a default public one
+func (s *Service) ResolveENS(name string) (string, error) {
+	rpcURL := s.config.EthRPCURL
+	if rpcURL == "" {
+		rpcURL = "https://eth.llamarpc.com"
+	}
+
+	client, err := ethclient.Dial(rpcURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to eth rpc: %v", err)
+	}
+	defer client.Close()
+
+	// Minimal ENS Resolution Implementation
+	// 1. NameHash
+	node, err := nameHash(name)
+	if err != nil {
+		return "", err
+	}
+
+	// 2. Get Resolver from Registry (0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e)
+	registryAddr := common.HexToAddress("0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e")
+
+	// resolver(node) signature: 0x0178b8bf
+	// methodID + node
+	data := append(common.Hex2Bytes("0178b8bf"), node[:]...)
+
+	res, err := client.CallContract(context.Background(), ethereum.CallMsg{
+		To:   &registryAddr,
+		Data: data,
+	}, nil)
+	if err != nil {
+		return "", fmt.Errorf("registry call failed: %v", err)
+	}
+
+	resolverAddr := common.BytesToAddress(res)
+	if resolverAddr == (common.Address{}) {
+		return "", ErrENSNotFound
+	}
+
+	// 3. Get Address from Resolver
+	// addr(node) signature: 0x3b3b57de
+	data = append(common.Hex2Bytes("3b3b57de"), node[:]...)
+
+	res, err = client.CallContract(context.Background(), ethereum.CallMsg{
+		To:   &resolverAddr,
+		Data: data,
+	}, nil)
+	if err != nil {
+		return "", fmt.Errorf("resolver call failed: %v", err)
+	}
+
+	targetAddr := common.BytesToAddress(res)
+	if targetAddr == (common.Address{}) {
+		return "", ErrENSNotFound
+	}
+
+	return targetAddr.Hex(), nil
+}
+
+// NameHash implementation
+func nameHash(name string) ([32]byte, error) {
+	var hash [32]byte
+	if name == "" {
+		return hash, nil
+	}
+	parts := strings.Split(name, ".")
+	for i := len(parts) - 1; i >= 0; i-- {
+		labelHash := crypto.Keccak256Hash([]byte(parts[i]))
+		data := append(hash[:], labelHash.Bytes()...)
+		hash = crypto.Keccak256Hash(data)
+	}
+	return hash, nil
+}
 
 type Service struct {
 	db          *db.Database
@@ -168,7 +247,7 @@ func (s *Service) UpdateUserWallet(userID uint, walletAddress string, chainID in
 	return s.db.UpdateUserWallet(userID, walletAddress, chainID, assetAddress)
 }
 
-func (s *Service) RegisterUser(username, provider, providerID, email, avatar, walletAddress string, mainWallet bool, preferredChainID int, preferredAssetAddress string) (*dbmodel.User, string, error) {
+func (s *Service) RegisterUser(username, provider, providerID, email, avatar, walletAddress string, mainWallet bool, preferredChainID int, preferredAssetAddress, description, background, twitter string) (*dbmodel.User, string, error) {
 	user := &dbmodel.User{
 		Username:         username,
 		Provider:         provider,
@@ -180,6 +259,10 @@ func (s *Service) RegisterUser(username, provider, providerID, email, avatar, wa
 		CreatedAt:        time.Now(),
 		PreferredChainID: preferredChainID,
 		PreferredAsset:   preferredAssetAddress,
+		Description:      description,
+		BackgroundURL:    background,
+		TwitterHandle:    twitter,
+		WidgetTTS:        true,
 	}
 
 	if err := s.CreateUser(user); err != nil {

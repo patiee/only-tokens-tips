@@ -21,6 +21,10 @@ type SignupRequest struct {
 	MainWallet            bool   `json:"main_wallet"`
 	PreferredChainID      int    `json:"preferred_chain_id"`
 	PreferredAssetAddress string `json:"preferred_asset_address"`
+	AvatarURL             string `json:"avatar_url"`
+	Description           string `json:"description"`
+	BackgroundURL         string `json:"background_url"`
+	TwitterHandle         string `json:"twitter_handle"`
 }
 
 type UpdateWidgetRequest struct {

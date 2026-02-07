@@ -3,22 +3,20 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { jwtDecode } from "jwt-decode";
-import { useAccount, useSignMessage, useReadContracts, useDisconnect } from "wagmi";
-import { Twitch, Monitor, Chrome, ArrowLeft, ChevronDown, Check, Coins, AlertTriangle, Wallet, LogOut } from "lucide-react";
-import { isAddress, erc20Abi } from "viem";
+import { useAccount, useSignMessage, useDisconnect, useEnsName, useEnsAvatar } from "wagmi";
+import { Twitch, Chrome, ArrowLeft, Wallet, AlertTriangle, Check, X, ExternalLink, User, FileText, Upload } from "lucide-react";
 import Link from "next/link";
 import { evmChains } from "@/config/generated-chains";
-import { allChains, chainFamilies, ChainFamily, CustomChainConfig, isValidAddress } from "@/config/chains";
+import { allChains, chainFamilies, ChainFamily } from "@/config/chains";
 import { useBitcoinWallet } from "@/contexts/BitcoinWalletContext";
-import { useCurrentAccount, useSignPersonalMessage } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSignPersonalMessage, useDisconnectWallet } from "@mysten/dapp-kit";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { WalletMultiButton, useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { WalletNetworkSelector } from "@/components/WalletNetworkSelector";
 import type { Token } from "@/hooks/useTokenList";
 import { WalletSelectionModal } from "@/components/WalletSelectionModal";
 import { WalletConnectButton } from "@/components/WalletConnectButton";
 import { WalletConnectionModals } from "@/components/WalletConnectionModals";
-
+// import { normalize } from 'viem/ens' // Removed as it causes error
 
 export default function AuthPage() {
     return (
@@ -35,12 +33,41 @@ function AuthContent() {
     const [formData, setFormData] = useState({
         username: "",
         signup_token: "",
+        wallet_address: "",
+        avatar_url: "",
+        description: "",
+        background_url: "",
+        twitter_handle: "",
     });
     const [usernameError, setUsernameError] = useState("");
     const [isEVMModalOpen, setIsEVMModalOpen] = useState(false);
     const [isSolanaModalOpen, setIsSolanaModalOpen] = useState(false);
     const [isBitcoinModalOpen, setIsBitcoinModalOpen] = useState(false);
     const [isSuiModalOpen, setIsSuiModalOpen] = useState(false);
+
+    // ENS Hooks
+    const { address: evmAddress, isConnected: isEVMConnected } = useAccount();
+    const { data: ensName } = useEnsName({ address: evmAddress });
+    const { data: ensAvatar } = useEnsAvatar({ name: ensName! });
+
+    useEffect(() => {
+        if (isEVMConnected && evmAddress) {
+            // Auto-fill from ENS
+            if (ensName) {
+                setFormData(prev => ({
+                    ...prev,
+                    username: ensName,
+                    avatar_url: ensAvatar || prev.avatar_url,
+                    wallet_address: evmAddress
+                }));
+            } else {
+                setFormData(prev => ({
+                    ...prev,
+                    wallet_address: evmAddress
+                }));
+            }
+        }
+    }, [isEVMConnected, evmAddress, ensName, ensAvatar]);
 
     useEffect(() => {
         const error = searchParams.get("error");
@@ -58,33 +85,21 @@ function AuthContent() {
             return;
         }
 
-        // Check for existing session (and prevent redirect if we are in signup flow)
-        // Check for existing session
         const storedToken = localStorage.getItem("user_token");
         const signupToken = searchParams.get("signup_token");
+        const urlStep = searchParams.get("step");
 
         if (storedToken && !signupToken && !error && !token) {
-            // Verify token validity (optional: could just trust existence for speed and let /me handle 401)
-            // For better UX, let's just redirect. If invalid, /me will redirect back.
             router.replace("/me");
             return;
         }
 
-        const urlStep = searchParams.get("step");
-        const urlUsername = searchParams.get("username");
-
         if (signupToken) {
-            // Restore state from URL
-            const nextFormData = {
-                username: urlUsername || "",
-                signup_token: signupToken
-            };
-            setFormData(nextFormData);
-
-            if (urlStep === "3" && urlUsername) {
-                setStep(3);
-            } else {
+            setFormData(prev => ({ ...prev, signup_token: signupToken }));
+            if (urlStep === "2") {
                 setStep(2);
+            } else {
+                setStep(2); // Default to step 2 if token present
             }
         }
     }, [searchParams, router]);
@@ -93,24 +108,210 @@ function AuthContent() {
         window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/auth/${provider}/login`;
     };
 
-    const handleUsernameSubmit = () => {
-        if (!formData.username) return;
-        setUsernameError("");
-        // Update URL to persist state
-        const params = new URLSearchParams(searchParams.toString());
-        params.set("step", "3");
-        params.set("username", formData.username);
-        router.push(`/auth?${params.toString()}`);
+    const validateUsername = (username: string) => {
+        if (!username) return "Username is required";
+        if (username.length < 3) return "Username must be at least 3 characters";
+        if (username.length > 20 && !username.includes(".")) return "Username must be at most 20 characters"; // Allow longer for ENS
+
+        // Regex for allowed chars: a-z, A-Z, 0-9, special chars
+        // But if it contains '.', it must match ENS rules check (backend does this, but frontend warning)
+        if (username.includes(".")) {
+            if (isEVMConnected && ensName && username.toLowerCase() === ensName.toLowerCase()) {
+                return ""; // Valid ENS match
+            }
+            // Be lenient here, backend enforces ownership
+            // But user asked: "if there is "." in the username, strict check... disallow "." unless verified"
+            // Since we can't fully verify 3rd party ENS on frontend easily without ownership check (which backend does),
+            // We warn if it doesn't match connected ENS.
+            if (isEVMConnected && (!ensName || username.toLowerCase() !== ensName.toLowerCase())) {
+                return "You can only use a .eth name that you own and is connected.";
+            }
+            if (!isEVMConnected) {
+                return "Connect your wallet to use an ENS name.";
+            }
+        }
+
+        // Backend regex: ^[a-zA-Z0-9!@#$%^&*()]+$
+        if (!/^[a-zA-Z0-9!@#$%^&*()]+$/.test(username)) {
+            return "Only letters, numbers, and !@#$%^&*() are allowed";
+        }
+
+        return "";
     };
 
-    const handleBackToUsername = (errorMsg?: string) => {
-        if (errorMsg) setUsernameError(errorMsg);
-        setStep(2);
-        // Update URL
-        const params = new URLSearchParams(searchParams.toString());
-        params.set("step", "2");
-        router.push(`/auth?${params.toString()}`);
+    const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setFormData({ ...formData, username: val });
+        setUsernameError(validateUsername(val));
     };
+
+    // Username Availability Check
+    const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+    useEffect(() => {
+        const username = formData.username;
+        if (!username || username.length < 3 || usernameError) return;
+
+        const checkAvailability = async () => {
+            // If it looks like ENS and user is connected, we might skip or handle differently,
+            // but backend ownership check is ultimate truth. 
+            // Here we check if "username" (account) already exists in DB.
+
+            setIsCheckingUsername(true);
+            try {
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/user/${username}`);
+                if (res.ok) {
+                    // 200 means user exists
+                    setUsernameError("Username is already taken");
+                } else if (res.status === 404) {
+                    // 404 means user does not exist (Available)
+                    // Keep error empty if validateUsername passed
+                    if (validateUsername(username) === "") {
+                        setUsernameError("");
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to check username", e);
+            } finally {
+                setIsCheckingUsername(false);
+            }
+        };
+
+        const timeoutId = setTimeout(checkAvailability, 500); // 500ms debounce
+        return () => clearTimeout(timeoutId);
+    }, [formData.username, usernameError]);
+
+    // Wallet Connection & Network State
+    const [selectedChainId, setSelectedChainId] = useState<number>(evmChains[0]?.id || 1);
+    const [selectedAsset, setSelectedAsset] = useState<Token | null>(null);
+
+    // Image Upload Logic
+    const handleFileUpload = async (file: File, type: 'avatar' | 'background') => {
+        // We need a token to upload? The backend HandleUpload checks for "Bearer token".
+        // But the user is not signed up yet.
+        // CHECK: specific requirements. Backend `HandleUpload` in `server.go` checks `ValidateSessionToken`.
+        // If users are signing up, they don't have a session token yet.
+        // However, `handleStartSignup` usually gives a `signup_token`.
+        // Does `HandleUpload` accept `signup_token`?
+        // Looking at `server.go` `HandleUpload`, it calls `ValidateSessionToken`.
+        // `ValidateSessionToken` checks JWT. `signup_token` is also a JWT but with `signup: true`.
+        // If `ValidateSessionToken` only checks signature, it might pass. 
+        // But if it checks DB for user, it might fail if user doesn't exist yet.
+        // Let's assume for now we might need to modify backend or use a different endpoint if it fails.
+        // BUT: User has `signup_token` (from social login) OR they are just connecting wallet?
+        // If they stick to Wallet only, they don't have a token until they sign (login).
+        // Wait, if they are connecting wallet for the first time to SIGN UP, they sign a message in `WalletLoginButton`.
+        // The response gives `signup_token` if they need to register.
+        // So they SHOULD have `formData.signup_token` at Step 2.
+        // Let's try using that as the Bearer token.
+
+        const token = formData.signup_token;
+        if (!token) {
+            alert("Please connect a wallet or login with social first to upload images.");
+            return;
+        }
+
+        const uploadData = new FormData();
+        uploadData.append("file", file);
+
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/upload`, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${token}`
+                },
+                body: uploadData
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                console.error("Upload failed", err);
+                alert("Upload failed: " + (err.error || "Unknown error"));
+                return;
+            }
+
+            const data = await res.json();
+            if (type === 'avatar') {
+                setFormData(prev => ({ ...prev, avatar_url: data.url }));
+            } else {
+                setFormData(prev => ({ ...prev, background_url: data.url }));
+            }
+        } catch (e: any) {
+            console.error(e);
+            alert("Upload failed");
+        }
+    };
+
+    const handleRegister = async () => {
+        const error = validateUsername(formData.username);
+        if (error) {
+            setUsernameError(error);
+            return;
+        }
+
+        try {
+            // If wallet connected, use that address. If not, maybe they linked social only?
+            // User requirement: "merge wallet connection...".
+            // If they haven't connected wallet, they can still sign up if they have social token?
+            // Yes, assuming social login provided signup_token.
+
+            // Prepare Request
+            const body = {
+                username: formData.username,
+                signup_token: formData.signup_token,
+                wallet_address: formData.wallet_address || evmAddress || "", // prioritize formData which might be set from other chains
+                main_wallet: !!formData.wallet_address,
+                preferred_chain_id: selectedChainId, // Default or selected
+                preferred_asset_address: selectedAsset?.address || "", // Default
+                avatar_url: formData.avatar_url,
+                description: formData.description,
+                background_url: formData.background_url,
+                twitter_handle: formData.twitter_handle,
+            };
+
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/auth/signup`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                localStorage.setItem("user_token", data.token);
+                router.push("/me");
+            } else {
+                setUsernameError(data.error || "Registration failed");
+            }
+        } catch (e: any) {
+            console.error(e);
+            setUsernameError("An unexpected error occurred");
+        }
+    };
+
+    // Wallet Connect logic moved here
+    const [isSelectionOpen, setIsSelectionOpen] = useState(false);
+    const { disconnect } = useDisconnect();
+    const { publicKey, disconnect: disconnectSolana } = useWallet();
+    const { address: btcAddress, disconnect: disconnectBtc } = useBitcoinWallet();
+    const currentSuiAccount = useCurrentAccount();
+    const { mutate: disconnectSui } = useDisconnectWallet();
+
+    const handleDisconnect = () => {
+        if (isEVMConnected) disconnect();
+        if (publicKey) disconnectSolana();
+        if (btcAddress) disconnectBtc();
+        if (currentSuiAccount) disconnectSui();
+        setFormData(prev => ({ ...prev, wallet_address: "", username: "" })); // Clear
+    };
+
+    const displayAddress = isEVMConnected
+        ? evmAddress
+        : publicKey
+            ? publicKey.toBase58()
+            : btcAddress
+                ? btcAddress
+                : currentSuiAccount
+                    ? currentSuiAccount.address
+                    : "";
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-black/95 text-white p-4 relative overflow-hidden">
@@ -130,24 +331,12 @@ function AuthContent() {
                 <div className="absolute bottom-[10%] right-[10%] w-[40%] h-[40%] bg-blue-600/10 blur-[100px] rounded-full" />
             </div>
 
-            <div className="w-full max-w-2xl bg-zinc-900/80 backdrop-blur-xl rounded-3xl p-8 border border-zinc-800 shadow-2xl relative z-10 transition-all duration-300 hover:shadow-purple-500/10 hover:border-zinc-700">
+            <div className="w-full max-w-2xl bg-zinc-900/40 backdrop-blur-xl rounded-3xl p-8 border border-white/5 shadow-2xl relative z-10 transition-all duration-300 hover:border-white/10">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 blur-[80px] rounded-full pointer-events-none" />
 
-                <Link href="/" className="inline-flex items-center text-zinc-500 hover:text-white mb-6 transition-colors">
+                <Link href="/" className="inline-flex items-center text-zinc-500 hover:text-white mb-6 transition-colors relative z-10">
                     <ArrowLeft size={16} className="mr-2" /> Back
                 </Link>
-
-                {step > 1 && (
-                    <div className="flex justify-between mb-8 relative">
-                        <div className="absolute top-1/2 left-0 w-full h-0.5 bg-zinc-800 -z-10 -translate-y-1/2 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-600 transition-all duration-300" style={{ width: `${((step - 1) / 2) * 100}%` }}></div>
-                        </div>
-                        {[1, 2, 3].map((s) => (
-                            <div key={s} className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold transition-all duration-300 ${step >= s ? "bg-blue-600 text-white scale-110 shadow-lg shadow-blue-500/50" : "bg-zinc-800 text-zinc-500"}`}>
-                                {s}
-                            </div>
-                        ))}
-                    </div>
-                )}
 
                 {step === 1 && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -165,18 +354,6 @@ function AuthContent() {
                             >
                                 <Twitch className="w-5 h-5" /> Continue with Twitch
                             </button>
-
-                            {/* <button
-                                onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/tiktok/login`}
-                                className="w-full flex items-center justify-center space-x-3 bg-black/50 hover:bg-black/70 border border-white/10 hover:border-white/20 text-white p-4 rounded-xl transition-all duration-300 group backdrop-blur-sm"
-                            >
-                                <div className="p-2 bg-black rounded-full group-hover:scale-110 transition-transform">
-                                    <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
-                                    </svg>
-                                </div>
-                                <span className="font-medium">Continue with TikTok</span>
-                            </button> */}
 
                             <button
                                 onClick={() => handleSocialLogin("google")}
@@ -211,73 +388,181 @@ function AuthContent() {
                 {step === 2 && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                         <div className="text-center">
-                            <h2 className="text-3xl font-bold mb-2">Choose Username</h2>
-                            <p className="text-zinc-400 text-sm">This will be your unique handle.</p>
+                            <h2 className="text-3xl font-bold mb-2">Complete Profile</h2>
+                            <p className="text-zinc-400 text-sm">Choose your username and wallet to receive tips</p>
                         </div>
 
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Username</label>
-                            <input
-                                type="text"
-                                placeholder="e.g. SatoshiNakamoto"
-                                value={formData.username}
-                                onChange={(e) => {
-                                    setFormData({ ...formData, username: e.target.value });
-                                    setUsernameError("");
-                                }}
-                                className={`w-full bg-zinc-950 border rounded-xl p-4 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-zinc-600 ${usernameError ? "border-red-500 focus:border-red-500" : "border-zinc-800 focus:border-blue-500"}`}
+                        {/* Combined Settings-like Form */}
+                        <div className="grid gap-6">
+                            {/* Images Row */}
+                            <div className="relative group mx-auto w-full">
+                                {/* Background Image */}
+                                <div
+                                    className="w-full h-48 rounded-2xl bg-black/50 border border-white/5 overflow-hidden cursor-pointer relative transition-all hover:border-white/10"
+                                    onClick={() => (formData.signup_token) && document.getElementById('bg-upload')?.click()}
+                                >
+                                    {formData.background_url ? (
+                                        <img src={formData.background_url} alt="Background" className="w-full h-full object-cover transition-opacity group-hover:opacity-75" />
+                                    ) : (
+                                        <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600 gap-2">
+                                            <FileText size={32} />
+                                            <span className="text-xs font-bold uppercase tracking-wider">Upload Cover</span>
+                                        </div>
+                                    )}
+
+                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="bg-black/50 backdrop-blur-sm p-3 rounded-full border border-white/10">
+                                            <Upload className="text-white" size={24} />
+                                        </div>
+                                    </div>
+                                    <input
+                                        id="bg-upload"
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'background')}
+                                    />
+                                </div>
+
+                                {/* Avatar Image (Overlapping) */}
+                                <div
+                                    className="absolute -bottom-10 left-6 w-24 h-24 rounded-full border-4 border-black bg-zinc-900 overflow-hidden cursor-pointer group/avatar shadow-xl"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (formData.signup_token) document.getElementById('avatar-upload')?.click();
+                                    }}
+                                >
+                                    {formData.avatar_url ? (
+                                        <img src={formData.avatar_url} alt="Avatar" className="w-full h-full object-cover transition-opacity group-hover/avatar:opacity-75" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-zinc-500">
+                                            <User size={32} />
+                                        </div>
+                                    )}
+                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity bg-black/40 backdrop-blur-[2px]">
+                                        <Upload className="text-white" size={20} />
+                                    </div>
+                                    <input
+                                        id="avatar-upload"
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'avatar')}
+                                    />
+                                </div>
+                            </div>
+                            {/* Spacer for overlapping avatar */}
+                            <div className="h-6"></div>
+
+                            {/* Username Input */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Username</label>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. Satoshi"
+                                        value={formData.username}
+                                        onChange={handleUsernameChange}
+                                        className={`w-full bg-zinc-950 border rounded-xl p-4 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-zinc-600 ${usernameError ? "border-red-500 focus:border-red-500" : "border-zinc-800 focus:border-blue-500"}`}
+                                    />
+                                    {ensName && formData.username === ensName && (
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-green-500">
+                                            <Check size={20} />
+                                        </div>
+                                    )}
+                                </div>
+                                {usernameError ? (
+                                    <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
+                                        <AlertTriangle size={12} /> {usernameError}
+                                    </p>
+                                ) : (
+                                    <p className="text-zinc-500 text-xs mt-1">
+                                        {isEVMConnected && !ensName ? (
+                                            <span className="flex items-center gap-1">
+                                                No ENS found. <a href="https://app.ens.domains" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline flex items-center gap-0.5">Purchase ENS <ExternalLink size={10} /></a>
+                                            </span>
+                                        ) : (
+                                            "Username or ENS"
+                                        )}
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Network Selection */}
+                            <WalletNetworkSelector
+                                selectedChainId={selectedChainId}
+                                onChainSelect={setSelectedChainId}
+                                selectedAsset={selectedAsset}
+                                onAssetSelect={setSelectedAsset}
+                                label="Receive Tips On"
                             />
-                            {usernameError && (
-                                <p className="text-red-400 text-xs mt-1">{usernameError}</p>
+
+                            {/* Connected Wallet Info */}
+                            {(isEVMConnected || publicKey || btcAddress || currentSuiAccount) ? (
+                                <div className="p-4 bg-zinc-800/50 rounded-xl border border-zinc-700 flex items-center justify-between">
+                                    <div className="text-zinc-400 font-mono text-sm break-all mr-4">
+                                        {displayAddress}
+                                    </div>
+                                    <button
+                                        onClick={handleDisconnect}
+                                        className="text-xs text-red-400 hover:text-red-300 px-3 py-1 bg-red-500/10 rounded-lg transition-colors whitespace-nowrap"
+                                    >
+                                        Disconnect
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="w-full mt-2">
+                                    <WalletConnectButton
+                                        chainFamily={allChains.find(c => c.id === selectedChainId)?.family || ChainFamily.EVM}
+                                        onOpenSolana={() => setIsSolanaModalOpen(true)}
+                                        onOpenBitcoin={() => setIsBitcoinModalOpen(true)}
+                                        onOpenSui={() => setIsSuiModalOpen(true)}
+                                        onOpenEVM={() => setIsEVMModalOpen(true)}
+                                    />
+                                </div>
                             )}
                         </div>
 
-                        <button
-                            onClick={handleUsernameSubmit}
-                            disabled={!formData.username}
-                            className="w-full p-4 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-lg shadow-lg shadow-blue-900/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                        >
-                            Continue
-                        </button>
-                    </div>
-                )}
+                        {(() => {
+                            const selectedChain = allChains.find(c => c.id === selectedChainId);
+                            const family = selectedChain?.family || ChainFamily.EVM;
+                            const isWalletConnectedForSelectedChain =
+                                (family === ChainFamily.EVM && isEVMConnected) ||
+                                (family === ChainFamily.SOLANA && !!publicKey) ||
+                                (family === ChainFamily.BITCOIN && !!btcAddress) ||
+                                (family === ChainFamily.SUI && !!currentSuiAccount);
 
-                {step === 3 && (
-                    <WalletConnectStep
-                        formData={formData}
-                        onBack={() => handleBackToUsername()}
-                        onError={(msg) => handleBackToUsername(msg)}
-                        onOpenEVM={() => setIsEVMModalOpen(true)}
-                        onOpenSolana={() => setIsSolanaModalOpen(true)}
-                        onOpenBitcoin={() => setIsBitcoinModalOpen(true)}
-                        onOpenSui={() => setIsSuiModalOpen(true)}
-                    />
+                            return (
+                                <button
+                                    onClick={handleRegister}
+                                    disabled={!formData.username || !!usernameError || !isWalletConnectedForSelectedChain}
+                                    className="w-full py-4 rounded-xl bg-white hover:bg-zinc-200 transition-all duration-200 text-black font-bold text-lg uppercase tracking-wide active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
+                                >
+                                    Create Account
+                                </button>
+                            );
+                        })()}
+                    </div>
                 )}
             </div>
         </div>
     );
 }
 
+// ... (WalletLoginButton remains similar but we might need to adjust props if needed, mostly kept for Step 1)
+function WalletLoginButton({ setStep, setFormData, onOpenEVM, onOpenSolana, onOpenBitcoin, onOpenSui }: any) {
+    // Keep existing implementation
+    // ...
+    // But when login succeeds with "signup_needed", it sets step 2.
+    // ...
+    // NOTE: Copying existing WalletLoginButton implementation below for completeness if I replace the whole file.
+    // To save tokens, I will assume the previous implementation is fine, but I need to make sure I include it in the replacement or I replace the whole file. 
+    // Since I am replacing the whole file, I MUST include WalletLoginButton.
 
-
-function WalletLoginButton({
-    setStep,
-    setFormData,
-    onOpenEVM,
-    onOpenSolana,
-    onOpenBitcoin,
-    onOpenSui
-}: {
-    setStep: (step: number) => void,
-    setFormData: React.Dispatch<React.SetStateAction<any>>,
-    onOpenEVM: () => void,
-    onOpenSolana: () => void,
-    onOpenBitcoin: () => void,
-    onOpenSui: () => void
-}) {
     // EVM
     const { address: evmAddress, isConnected: isEVMConnected } = useAccount();
     const { signMessageAsync: signEVM } = useSignMessage();
+    const router = useRouter();
 
     // Solana
     const { publicKey: solanaPublicKey, connected: isSolanaConnected, signMessage: signSolana } = useWallet();
@@ -290,9 +575,9 @@ function WalletLoginButton({
     const { mutateAsync: signSui } = useSignPersonalMessage();
     const isSuiConnected = !!suiAccount;
 
-    const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const [isSelectionOpen, setIsSelectionOpen] = useState(false);
 
     const performLogin = async (
         address: string,
@@ -304,28 +589,23 @@ function WalletLoginButton({
         try {
             const timestamp = Math.floor(Date.now() / 1000);
             let signature = "";
-            let message = "";
 
             if (chainFamily === ChainFamily.EVM || chainFamily === ChainFamily.BITCOIN) {
-                // EVM & BTC usually expect standard string/json structure
-                message = `{"address":"${address}","timestamp":${timestamp}}`;
                 signature = await signFn();
             } else if (chainFamily === ChainFamily.SOLANA) {
-                // Solana signMessage returns Uint8Array, we need hex/base58
-                // Handled in specific wrapper below or passed signFn returns string
                 signature = await signFn();
             } else if (chainFamily === ChainFamily.SUI) {
                 signature = await signFn();
             }
 
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/auth/wallet-login`, {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/auth/wallet/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     address,
                     timestamp,
                     signature,
-                    chain_family: chainFamily // Backend needs to know family to verify signature
+                    chain_family: chainFamily
                 })
             });
 
@@ -345,7 +625,6 @@ function WalletLoginButton({
 
         } catch (e: any) {
             console.error(e);
-            // Handle specific user rejection errors for better UX
             if (e.message?.includes("User rejected") || e.message?.includes("User denied")) {
                 setError("Request rejected by user.");
             } else {
@@ -359,7 +638,6 @@ function WalletLoginButton({
     const handleLoginEVM = async () => {
         if (!isEVMConnected || !evmAddress) return onOpenEVM();
         await performLogin(evmAddress, ChainFamily.EVM, async () => {
-            // Reconstruct message inside here if needed or pass logic
             const timestamp = Math.floor(Date.now() / 1000);
             return await signEVM({ message: `{"address":"${evmAddress}","timestamp":${timestamp}}` });
         });
@@ -372,8 +650,6 @@ function WalletLoginButton({
             const messageStr = `{"address":"${solanaPublicKey.toBase58()}","timestamp":${timestamp}}`;
             const message = new TextEncoder().encode(messageStr);
             const signatureBytes = await signSolana(message);
-            // Hex encoded for consistency with other chains if backend supports it, or Base58
-            // Let's use Hex as per previous SolanaLoginButton
             return Array.from(signatureBytes).map(b => b.toString(16).padStart(2, '0')).join('');
         });
     };
@@ -396,10 +672,6 @@ function WalletLoginButton({
             return result.signature;
         });
     };
-
-    const [isSelectionOpen, setIsSelectionOpen] = useState(false);
-
-    // ... handlers (handleLoginEVM etc) ...
 
     return (
         <>
@@ -433,201 +705,12 @@ function WalletLoginButton({
     );
 }
 
+// Interfaces
 interface FormData {
     username: string;
     signup_token: string;
 }
 
-
-interface WalletConnectStepProps {
-    formData: FormData;
-    onBack: () => void;
-    onError: (msg: string) => void;
-    onOpenEVM: () => void;
-    onOpenSolana: () => void;
-    onOpenBitcoin: () => void;
-    onOpenSui: () => void;
-}
-
-function WalletConnectStep({ formData, onBack, onError, onOpenEVM, onOpenSolana, onOpenBitcoin, onOpenSui }: WalletConnectStepProps) {
-    const { address, isConnected } = useAccount();
-    const { disconnect } = useDisconnect();
-    const { publicKey, connected: solanaConnected } = useWallet();
-    const { address: btcAddress, isConnected: btcConnected } = useBitcoinWallet();
-    const currentSuiAccount = useCurrentAccount();
-    const suiConnected = !!currentSuiAccount;
-
-    const router = useRouter();
-    const [loading, setLoading] = useState(false);
-    const [showSessionExpired, setShowSessionExpired] = useState(false);
-
-    // Preferences
-    const [selectedChainId, setSelectedChainId] = useState<number>(evmChains[0]?.id || 1);
-    const [selectedAsset, setSelectedAsset] = useState<Token | null>(null);
-
-    // Select chain object
-    const selectedChain = allChains.find(c => c.id === selectedChainId);
-
-    const handleChainSelect = (chainId: number) => {
-        setSelectedChainId(chainId);
-    };
-
-    const handleFinish = async () => {
-        setLoading(true);
-        try {
-            // Determine active address based on chain family
-            let finalAddress = "";
-
-            if (selectedChain?.family === ChainFamily.SOLANA) {
-                if (solanaConnected && publicKey) {
-                    finalAddress = publicKey.toBase58();
-                }
-            } else if (selectedChain?.family === ChainFamily.EVM) {
-                if (isConnected && address) {
-                    finalAddress = address;
-                }
-            } else if (selectedChain?.family === ChainFamily.BITCOIN) {
-                if (btcConnected && btcAddress) {
-                    finalAddress = btcAddress;
-                }
-            } else if (selectedChain?.family === ChainFamily.SUI) {
-                if (suiConnected && currentSuiAccount) {
-                    finalAddress = currentSuiAccount.address;
-                }
-            }
-
-            if (!finalAddress) {
-                throw new Error("Please connect your wallet first.");
-            }
-
-            if (formData.signup_token) {
-                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/auth/signup`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        signup_token: formData.signup_token,
-                        username: formData.username,
-                        wallet_address: finalAddress,
-                        main_wallet: true,
-                        preferred_chain_id: selectedChainId,
-                        preferred_asset_address: selectedAsset?.address || ""
-                    })
-                });
-
-                const data = await res.json();
-
-                if (!res.ok) {
-                    throw new Error(data.error || "Registration failed");
-                }
-
-                if (data.token) {
-                    localStorage.setItem("user_token", data.token);
-                    router.push("/me");
-                } else {
-                    throw new Error("No session token received");
-                }
-            } else {
-                // If we are here without a signup token, something is wrong with the flow
-                // But for now, if they are just connecting a wallet to start a flow?
-                // No, Auth page is for finding an account.
-                // If they are here, they simply must have a token.
-                throw new Error("Session expired or invalid. Please start over.");
-            }
-
-        } catch (e: any) {
-            console.error(e);
-            onError(e.message || "Failed to setup wallet");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-
-
-    return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 text-center">
-            <div className="text-center mb-6">
-                <h2 className="text-3xl font-bold mb-2">Connect Wallet</h2>
-                <p className="text-zinc-400 text-sm">Link your wallet to receive tips directly to your address</p>
-            </div>
-
-            {/* Network Selector */}
-            <WalletNetworkSelector
-                selectedChainId={selectedChainId}
-                onChainSelect={handleChainSelect}
-                selectedAsset={selectedAsset}
-                onAssetSelect={setSelectedAsset}
-            />
-
-            {/* Wallet Button */}
-            <div className="flex justify-center py-2">
-                <WalletConnectButton
-                    chainFamily={selectedChain?.family || ChainFamily.EVM}
-                    onOpenSolana={onOpenSolana}
-                    onOpenBitcoin={onOpenBitcoin}
-                    onOpenSui={onOpenSui}
-                    onOpenEVM={onOpenEVM}
-                    showFullAddress={true}
-                    showIcon={false}
-                />
-            </div>
-
-            <div className="space-y-3">
-                <button
-                    onClick={handleFinish}
-                    disabled={loading}
-                    className="w-full p-4 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-lg shadow-lg shadow-purple-900/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                >
-                    {loading ? (
-                        <span className="flex items-center justify-center gap-2">
-                            <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                            Creating Account...
-                        </span>
-                    ) : "Finish Setup"}
-                </button>
-
-                {!isConnected && !solanaConnected && !btcConnected && !suiConnected && (
-                    <button
-                        onClick={() => handleFinish()}
-                        className="text-zinc-500 hover:text-zinc-300 text-sm"
-                    >
-                        Skip for now
-                    </button>
-                )}
-
-                <button onClick={onBack} className="text-zinc-500 hover:text-zinc-300 text-sm block mx-auto mt-4">
-                    Back to Username
-                </button>
-            </div>
-        </div>
-    );
-}
-
-function SessionExpiredModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
-    if (!isOpen) return null;
-
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
-                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-500/10 text-red-500 mb-4 mx-auto">
-                    <AlertTriangle size={24} />
-                </div>
-                <h3 className="text-xl font-bold text-center mb-2">Session Expired</h3>
-                <p className="text-zinc-400 text-center text-sm mb-6">
-                    Your session credential has expired or is invalid. Please sign in again to continue.
-                </p>
-                <div className="flex justify-center">
-                    <button
-                        onClick={onClose}
-                        className="w-full p-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold shadow-lg shadow-red-900/20 transition-all"
-                    >
-                        Back to Login
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-}
 
 
 

@@ -415,11 +415,11 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
                             <button
                                 onClick={handleTip}
                                 disabled={loading || !amount || parseFloat(amount) <= 0}
-                                className="w-full py-5 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 bg-[length:200%_auto] hover:bg-right transition-all duration-500 text-white font-black text-xl active:scale-[0.98] disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-[0_0_30px_-5px_rgba(147,51,234,0.3)] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] transform hover:-translate-y-1"
+                                className="w-full py-4 rounded-xl bg-white hover:bg-zinc-200 transition-all duration-200 text-black font-bold text-lg uppercase tracking-wide active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
                             >
                                 {loading ? (
                                     <>
-                                        <div className="w-5 h-5 border-3 border-white/20 border-t-white rounded-full animate-spin" />
+                                        <div className="w-5 h-5 border-3 border-zinc-300 border-t-black rounded-full animate-spin" />
                                         <span className="text-lg">Processing...</span>
                                     </>
                                 ) : (

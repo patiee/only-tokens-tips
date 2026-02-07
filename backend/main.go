@@ -56,6 +56,7 @@ func main() {
 		MinIOAccessKeyID:   os.Getenv("MINIO_ACCESS_KEY"),
 		MinIOSecretKey:     os.Getenv("MINIO_SECRET_KEY"),
 		MinIOUseSSL:        os.Getenv("MINIO_USE_SSL") == "true",
+		EthRPCURL:          os.Getenv("ETH_RPC_URL"),
 	}
 
 	// Init and Start Server

@@ -40,7 +40,7 @@ export default function WidgetPage() {
 
     // Fetch Widget Config
     useEffect(() => {
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/widget/config/${token}`)
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/widget/${token}/config`)
             .then(res => res.json())
             .then(data => {
                 if (data.username) {

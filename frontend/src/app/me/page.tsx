@@ -155,7 +155,7 @@ function DashboardContent() {
             {/* Global Gradient Background */}
             <div className="fixed inset-0 bg-gradient-to-br from-purple-900/20 via-black to-blue-900/10 pointer-events-none" />
 
-            <div className="max-w-6xl mx-auto p-4 sm:p-8 space-y-8 relative z-10">
+            <div className="max-w-7xl mx-auto p-4 sm:p-8 space-y-8 relative z-10">
 
                 {/* Header */}
                 <header className="flex flex-col sm:flex-row items-center gap-8 py-8 border-b border-white/5">
@@ -201,7 +201,7 @@ function DashboardContent() {
                                     target="_blank"
                                     className="text-xs font-bold text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 px-4 py-2 rounded-full transition-all border border-blue-500/10 hover:border-blue-500/30"
                                 >
-                                    View Live
+                                    View
                                 </Link>
                             </div>
                             <p className="text-zinc-400 text-sm mb-6 font-medium leading-relaxed max-w-[90%]">
