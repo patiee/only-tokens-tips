@@ -279,6 +279,8 @@ function WalletsContent() {
                                 onOpenBitcoin={() => setIsBitcoinModalOpen(true)}
                                 onOpenSui={() => setIsSuiModalOpen(true)}
                                 onOpenEVM={() => setIsEVMModalOpen(true)}
+                                showFullAddress={true}
+                                showIcon={false}
                             />
 
                             <button

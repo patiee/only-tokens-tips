@@ -93,9 +93,7 @@ export default function TipPage() {
             {/* Header / Nav */}
             <div className="fixed top-0 left-0 right-0 z-50 bg-black/50 backdrop-blur-xl border-b border-white/5">
                 <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-between">
-                    <a href="/" className="p-2 -ml-2 text-zinc-400 hover:text-white transition-colors">
-                        <ArrowLeft size={20} />
-                    </a>
+                    <div />
                     <div className="font-bold text-sm tracking-wider uppercase text-zinc-500">
                         {status ? <span className="text-purple-400 animate-pulse">{status}</span> : "Send Tip"}
                     </div>
@@ -116,23 +114,14 @@ export default function TipPage() {
                                 />
                             </div>
                         </div>
-                        <div className="absolute -bottom-2 -right-2 bg-black rounded-full p-1 border border-zinc-800">
-                            <div className="bg-green-500 w-3 h-3 rounded-full animate-pulse" />
-                        </div>
+
                     </div>
 
                     <div>
                         <h1 className="text-2xl font-bold text-white tracking-tight">{user.username}</h1>
-                        <p className="text-zinc-400 text-sm mt-1">@{user.username}</p>
                     </div>
 
-                    {/* Social Stats/Links (Only BaseScan for now) */}
-                    <div className="flex items-center justify-center gap-4 pt-2">
-                        <a href={`https://basescan.org/address/${user.eth_address}`} target="_blank" rel="noopener noreferrer"
-                            className="p-2 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-green-400 hover:border-green-500/50 transition-all hover:scale-110">
-                            <ExternalLink size={16} />
-                        </a>
-                    </div>
+
                 </div>
 
                 {/* Simplified Content - LiFi Only */}

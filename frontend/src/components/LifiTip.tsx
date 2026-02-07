@@ -321,7 +321,7 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
 
             {/* Actions */}
             <div className="space-y-4">
-                <div className="w-full flex items-center justify-between px-4 py-3 bg-zinc-950/80 rounded-xl border border-zinc-800/50 backdrop-blur-sm shadow-sm transition-all hover:border-zinc-700">
+                <div className={`w-full transition-all ${isConnected && currentAddress ? "flex items-center justify-between px-4 py-3 bg-zinc-950/80 rounded-xl border border-zinc-800/50 backdrop-blur-sm shadow-sm hover:border-zinc-700" : ""}`}>
                     {isConnected && currentAddress ? (
                         <>
                             <div className="flex items-center gap-3">
