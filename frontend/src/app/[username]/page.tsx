@@ -6,6 +6,7 @@ import { useAccount } from "wagmi";
 import { LifiTip } from "@/components/LifiTip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ArrowLeft, ExternalLink, Globe, Twitter } from "lucide-react";
+import Link from "next/link";
 
 // Define interface matching backend/db/model/model.go
 interface PublicUserProfile {
@@ -93,9 +94,11 @@ export default function TipPage() {
             {/* Header / Nav */}
             <div className="fixed top-0 left-0 right-0 z-50 bg-black/50 backdrop-blur-xl border-b border-white/5">
                 <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-between">
-                    <div />
+                    <Link href="/" className="font-black text-xl tracking-tighter bg-clip-text text-transparent bg-gradient-to-tr from-white to-zinc-400 hover:opacity-80 transition-opacity">
+                        Stream Tips
+                    </Link>
                     <div className="font-bold text-sm tracking-wider uppercase text-zinc-500">
-                        {status ? <span className="text-purple-400 animate-pulse">{status}</span> : "Send Tip"}
+                        {status ? <span className="text-purple-400 animate-pulse">{status}</span> : ""}
                     </div>
                     <div className="w-8" />
                 </div>

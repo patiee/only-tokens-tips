@@ -1,3 +1,4 @@
+"use client";
 
 import { motion } from "framer-motion";
 
@@ -35,7 +36,7 @@ export const TipWidget = ({ tip, config, isPreview = false }: TipWidgetProps) =>
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.5, ease: "easeOut" }}
-            className={`w-full max-w-sm rounded-xl p-6 shadow-2xl relative ${isPreview ? "" : "border-2 border-white/10"}`} // Added border to live widget for visibility on dark/transparent backgrounds if needed, matching previous styles
+            className={`w-full max-w-xl rounded-xl p-6 shadow-2xl relative ${isPreview ? "" : "border-2 border-white/10"}`} // Added border to live widget for visibility on dark/transparent backgrounds if needed, matching previous styles
             style={{
                 backgroundColor: config.background_color,
             }}
@@ -43,7 +44,7 @@ export const TipWidget = ({ tip, config, isPreview = false }: TipWidgetProps) =>
             <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white/20 shadow-md shrink-0">
                     <img
-                        src={`https://api.dicebear.com/7.x/lorelei/svg?seed=${avatarSeed}&backgroundColor=b6e3f4,c0aede,d1d4f9`}
+                        src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}&backgroundColor=b6e3f4,c0aede,d1d4f9`}
                         alt="Avatar"
                         className="w-full h-full bg-zinc-800 object-cover"
                     />
