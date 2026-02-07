@@ -66,7 +66,7 @@ export function CustomEVMWalletModal({ isOpen, onClose }: CustomEVMWalletModalPr
                             >
                                 <div className="w-10 h-10 rounded-xl bg-zinc-900 p-2 flex items-center justify-center border border-zinc-800 group-hover:border-zinc-700 group-hover:bg-zinc-800 transition-colors">
                                     {/* We can try to get icon from connector, but wagmi connectors don't always expose icon URLs easily in v2 without metadata. 
-                                         RainbowKit handles this well. For basic wagmi, we might need a map or check connector.icon if available. */}
+                                         For basic wagmi, we might need a map or check connector.icon if available. */}
                                     {connector.icon ? (
                                         <img src={connector.icon} alt={connector.name} className="w-full h-full object-contain" />
                                     ) : (

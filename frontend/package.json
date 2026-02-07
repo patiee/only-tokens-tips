@@ -14,7 +14,6 @@
     "@mysten/dapp-kit": "^1.0.1",
     "@mysten/sui.js": "^0.54.1",
     "@radix-ui/themes": "^3.2.1",
-    "@rainbow-me/rainbowkit": "^2.2.10",
     "@solana/wallet-adapter-base": "^0.9.27",
     "@solana/wallet-adapter-react": "^0.15.39",
     "@solana/wallet-adapter-react-ui": "^0.9.39",

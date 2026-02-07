@@ -17,6 +17,7 @@ export type UserProfile = {
 function DashboardContent() {
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [copied, setCopied] = useState(false);
+    const [copiedLink, setCopiedLink] = useState(false);
     const [error, setError] = useState("");
     const [tips, setTips] = useState<any[]>([]);
     const router = useRouter();
@@ -102,6 +103,14 @@ function DashboardContent() {
         setTimeout(() => setCopied(false), 2000);
     };
 
+    const copyLinkToClipboard = () => {
+        if (!profile) return;
+        const url = `${window.location.origin}/${profile.username}`;
+        navigator.clipboard.writeText(url);
+        setCopiedLink(true);
+        setTimeout(() => setCopiedLink(false), 2000);
+    };
+
     if (error) return (
         <div className="min-h-screen flex items-center justify-center bg-black text-white p-4">
             <div className="bg-zinc-900 border border-red-900/50 p-6 rounded-2xl max-w-md w-full text-center">
@@ -164,24 +173,6 @@ function DashboardContent() {
                         </h1>
 
                     </div>
-
-                    <div className="flex gap-3">
-                        <Link
-                            href={`/${profile.username}`}
-                            className="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 border border-zinc-700"
-                        >
-                            <ExternalLink size={16} /> Public Page
-                        </Link>
-                        <button
-                            onClick={() => {
-                                localStorage.removeItem("user_token");
-                                router.push("/");
-                            }}
-                            className="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-lg font-medium transition-colors border border-red-500/20"
-                        >
-                            Logout
-                        </button>
-                    </div>
                 </header>
 
                 {/* Main Grid */}
@@ -189,6 +180,39 @@ function DashboardContent() {
 
                     {/* Left Col: Setup & Wallet */}
                     <div className="space-y-8">
+
+                        {/* Public Page Card */}
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-[50px] rounded-full pointer-events-none group-hover:bg-blue-500/20 transition-all" />
+                            <div className="flex justify-between items-start mb-4">
+                                <h3 className="text-lg font-bold flex items-center gap-2">
+                                    <ExternalLink className="text-blue-400" /> Public Page
+                                </h3>
+                                <Link
+                                    href={`/${profile.username}`}
+                                    target="_blank"
+                                    className="text-xs font-semibold text-blue-400 hover:text-blue-300 bg-blue-900/20 hover:bg-blue-900/30 px-3 py-1.5 rounded-full transition-colors"
+                                >
+                                    View
+                                </Link>
+                            </div>
+                            <p className="text-zinc-400 text-sm mb-4">
+                                Share this link with your viewers to receive tips.
+                            </p>
+
+                            <div className="flex gap-2">
+                                <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-xs text-zinc-500 font-mono truncate flex-1">
+                                    {typeof window !== 'undefined' ? `${window.location.origin}/${profile.username}` : `.../${profile.username}`}
+                                </div>
+                                <button
+                                    onClick={copyLinkToClipboard}
+                                    className={`p-3 rounded-lg border transition-all ${copiedLink ? "bg-green-500/10 border-green-500/20 text-green-400" : "bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-white"}`}
+                                >
+                                    {copiedLink ? <Check size={18} /> : <Copy size={18} />}
+                                </button>
+                            </div>
+                        </div>
+
                         {/* Widget Card */}
                         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 relative overflow-hidden group">
                             <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 blur-[50px] rounded-full pointer-events-none group-hover:bg-purple-500/20 transition-all" />

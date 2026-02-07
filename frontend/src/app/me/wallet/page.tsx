@@ -7,10 +7,7 @@ import Link from "next/link";
 import { useAccount } from "wagmi";
 import { allChains, ChainFamily, isValidAddress } from "@/config/chains";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { CustomSolanaWalletModal } from "@/components/CustomSolanaWalletModal";
-import { CustomEVMWalletModal } from "@/components/CustomEVMWalletModal";
-import { CustomBitcoinWalletModal } from "@/components/CustomBitcoinWalletModal";
-import { CustomSuiWalletModal } from "@/components/CustomSuiWalletModal";
+import { WalletConnectionModals } from "@/components/WalletConnectionModals";
 import { useBitcoinWallet } from "@/contexts/BitcoinWalletContext";
 import { useCurrentAccount, useDisconnectWallet } from "@mysten/dapp-kit";
 import { useDisconnect } from "wagmi";
@@ -314,21 +311,15 @@ function WalletsContent() {
                 </div>
 
                 {/* Custom Wallet Modals */}
-                <CustomSolanaWalletModal
-                    isOpen={isSolanaModalOpen}
-                    onClose={() => setIsSolanaModalOpen(false)}
-                />
-                <CustomBitcoinWalletModal
-                    isOpen={isBitcoinModalOpen}
-                    onClose={() => setIsBitcoinModalOpen(false)}
-                />
-                <CustomSuiWalletModal
-                    isOpen={isSuiModalOpen}
-                    onClose={() => setIsSuiModalOpen(false)}
-                />
-                <CustomEVMWalletModal
-                    isOpen={isEVMModalOpen}
-                    onClose={() => setIsEVMModalOpen(false)}
+                <WalletConnectionModals
+                    isSolanaOpen={isSolanaModalOpen}
+                    onSolanaClose={() => setIsSolanaModalOpen(false)}
+                    isBitcoinOpen={isBitcoinModalOpen}
+                    onBitcoinClose={() => setIsBitcoinModalOpen(false)}
+                    isSuiOpen={isSuiModalOpen}
+                    onSuiClose={() => setIsSuiModalOpen(false)}
+                    isEVMOpen={isEVMModalOpen}
+                    onEVMClose={() => setIsEVMModalOpen(false)}
                 />
             </div>
         </div>

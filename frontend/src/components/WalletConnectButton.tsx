@@ -6,7 +6,6 @@ import { useBitcoinWallet } from "@/contexts/BitcoinWalletContext";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { ChainFamily } from "@/config/chains";
 import { Wallet, ChevronDown, CheckCircle } from "lucide-react";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
 // Import our custom modals - We need to pass state/handlers for these or handle them here?
 // The Modals are usually rendered at the page level to avoid z-index issues, 
 // so this button should probably validly Accept "onOpen" props.
@@ -17,6 +16,8 @@ interface WalletConnectButtonProps {
     onOpenBitcoin: () => void;
     onOpenSui: () => void;
     onOpenEVM: () => void;
+    showFullAddress?: boolean;
+    showIcon?: boolean;
 }
 
 export function WalletConnectButton({
@@ -24,7 +25,9 @@ export function WalletConnectButton({
     onOpenSolana,
     onOpenBitcoin,
     onOpenSui,
-    onOpenEVM
+    onOpenEVM,
+    showFullAddress = false,
+    showIcon = true
 }: WalletConnectButtonProps) {
 
     // EVM State
@@ -39,6 +42,11 @@ export function WalletConnectButton({
     // Sui State
     const suiAccount = useCurrentAccount();
     const isSuiConnected = !!suiAccount;
+
+    const renderAddress = (address: string) => {
+        if (showFullAddress) return address;
+        return `${address.slice(0, 6)}...${address.slice(-4)}`;
+    };
 
     // Render based on family
     if (chainFamily === ChainFamily.SOLANA) {
@@ -58,13 +66,17 @@ export function WalletConnectButton({
             <button
                 onClick={onOpenSolana}
                 type="button"
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-center gap-3 transition-all hover:bg-zinc-900"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-between gap-3 transition-all hover:bg-zinc-900"
             >
-                <div className="w-6 h-6 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center text-[10px]">
-                    {solanaWallet?.adapter.icon ? <img src={solanaWallet.adapter.icon} className="w-full h-full rounded-full" alt="Wallet" /> : "S"}
+                <div className="flex items-center gap-3 overflow-hidden">
+                    {showIcon && (
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center text-[10px] shrink-0">
+                            {solanaWallet?.adapter.icon ? <img src={solanaWallet.adapter.icon} className="w-full h-full rounded-full" alt="Wallet" /> : "S"}
+                        </div>
+                    )}
+                    <span className={`font-medium break-all truncate ${showFullAddress ? "text-sm" : "text-xs"}`}>{solanaPublicKey ? renderAddress(solanaPublicKey.toBase58()) : ""}</span>
                 </div>
-                <span className="font-medium text-xs break-all">{solanaPublicKey?.toBase58().slice(0, 6)}...{solanaPublicKey?.toBase58().slice(-4)}</span>
-                <ChevronDown size={16} className="text-zinc-500" />
+                <ChevronDown size={16} className="text-zinc-500 shrink-0" />
             </button>
         );
     }
@@ -86,13 +98,17 @@ export function WalletConnectButton({
             <button
                 onClick={onOpenBitcoin}
                 type="button"
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-center gap-3 transition-all hover:bg-zinc-900"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-between gap-3 transition-all hover:bg-zinc-900"
             >
-                <div className="w-6 h-6 rounded-full bg-gradient-to-r from-orange-500 to-yellow-500 flex items-center justify-center text-[10px] text-white">
-                    B
+                <div className="flex items-center gap-3 overflow-hidden">
+                    {showIcon && (
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-r from-orange-500 to-yellow-500 flex items-center justify-center text-[10px] text-white shrink-0">
+                            B
+                        </div>
+                    )}
+                    <span className={`font-medium break-all truncate ${showFullAddress ? "text-sm" : "text-xs"}`}>{btcAddress ? renderAddress(btcAddress) : ""}</span>
                 </div>
-                <span className="font-medium text-xs break-all">{btcAddress?.slice(0, 6)}...{btcAddress?.slice(-4)}</span>
-                <ChevronDown size={16} className="text-zinc-500" />
+                <ChevronDown size={16} className="text-zinc-500 shrink-0" />
             </button>
         );
     }
@@ -114,19 +130,23 @@ export function WalletConnectButton({
             <button
                 onClick={onOpenSui}
                 type="button"
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-center gap-3 transition-all hover:bg-zinc-900"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-between gap-3 transition-all hover:bg-zinc-900"
             >
-                <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-400 to-cyan-300 flex items-center justify-center text-[10px] text-white">
-                    S
+                <div className="flex items-center gap-3 overflow-hidden">
+                    {showIcon && (
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-400 to-cyan-300 flex items-center justify-center text-[10px] text-white shrink-0">
+                            S
+                        </div>
+                    )}
+                    <span className={`font-medium break-all truncate ${showFullAddress ? "text-sm" : "text-xs"}`}>{suiAccount ? renderAddress(suiAccount.address) : ""}</span>
                 </div>
-                <span className="font-medium text-xs break-all">{suiAccount?.address.slice(0, 6)}...{suiAccount?.address.slice(-4)}</span>
-                <ChevronDown size={16} className="text-zinc-500" />
+                <ChevronDown size={16} className="text-zinc-500 shrink-0" />
             </button>
         );
     }
 
     // Default: EVM
-    // We can use RainbowKit's custom button or our own custom modal trigger
+    // We can use our own custom modal trigger
     if (!isEVMConnected) {
         return (
             <button
@@ -144,13 +164,17 @@ export function WalletConnectButton({
         <button
             onClick={onOpenEVM}
             type="button"
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-center gap-3 transition-all hover:bg-zinc-900"
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-between gap-3 transition-all hover:bg-zinc-900"
         >
-            <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 flex items-center justify-center text-[10px] text-white font-bold">
-                E
+            <div className="flex items-center gap-3 overflow-hidden">
+                {showIcon && (
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 flex items-center justify-center text-[10px] text-white font-bold shrink-0">
+                        E
+                    </div>
+                )}
+                <span className={`font-medium break-all truncate ${showFullAddress ? "text-sm" : "text-xs"}`}>{evmAddress ? renderAddress(evmAddress) : ""}</span>
             </div>
-            <span className="font-medium text-xs break-all">{evmAddress?.slice(0, 6)}...{evmAddress?.slice(-4)}</span>
-            <ChevronDown size={16} className="text-zinc-500" />
+            <ChevronDown size={16} className="text-zinc-500 shrink-0" />
         </button>
     );
 }

@@ -3,15 +3,22 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { jwtDecode } from "jwt-decode";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { useAccount, useSignMessage, useReadContracts } from "wagmi";
-import { Twitch, Monitor, Chrome, ArrowLeft, ChevronDown, Check, Coins, AlertTriangle } from "lucide-react";
+import { useAccount, useSignMessage, useReadContracts, useDisconnect } from "wagmi";
+import { Twitch, Monitor, Chrome, ArrowLeft, ChevronDown, Check, Coins, AlertTriangle, Wallet, LogOut } from "lucide-react";
 import { isAddress, erc20Abi } from "viem";
 import Link from "next/link";
 import { evmChains } from "@/config/generated-chains";
 import { allChains, chainFamilies, ChainFamily, CustomChainConfig, isValidAddress } from "@/config/chains";
+import { useBitcoinWallet } from "@/contexts/BitcoinWalletContext";
+import { useCurrentAccount, useSignPersonalMessage } from "@mysten/dapp-kit";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton, useWalletModal } from "@solana/wallet-adapter-react-ui";
+import { WalletNetworkSelector } from "@/components/WalletNetworkSelector";
+import type { Token } from "@/hooks/useTokenList";
+import { WalletSelectionModal } from "@/components/WalletSelectionModal";
+import { WalletConnectButton } from "@/components/WalletConnectButton";
+import { WalletConnectionModals } from "@/components/WalletConnectionModals";
+
 
 export default function AuthPage() {
     return (
@@ -30,6 +37,10 @@ function AuthContent() {
         signup_token: "",
     });
     const [usernameError, setUsernameError] = useState("");
+    const [isEVMModalOpen, setIsEVMModalOpen] = useState(false);
+    const [isSolanaModalOpen, setIsSolanaModalOpen] = useState(false);
+    const [isBitcoinModalOpen, setIsBitcoinModalOpen] = useState(false);
+    const [isSuiModalOpen, setIsSuiModalOpen] = useState(false);
 
     useEffect(() => {
         const error = searchParams.get("error");
@@ -92,6 +103,17 @@ function AuthContent() {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-black/95 text-white p-4 relative overflow-hidden">
+            <WalletConnectionModals
+                isSolanaOpen={isSolanaModalOpen}
+                onSolanaClose={() => setIsSolanaModalOpen(false)}
+                isBitcoinOpen={isBitcoinModalOpen}
+                onBitcoinClose={() => setIsBitcoinModalOpen(false)}
+                isSuiOpen={isSuiModalOpen}
+                onSuiClose={() => setIsSuiModalOpen(false)}
+                isEVMOpen={isEVMModalOpen}
+                onEVMClose={() => setIsEVMModalOpen(false)}
+            />
+
             <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
                 <div className="absolute top-[20%] left-[10%] w-[50%] h-[50%] bg-purple-600/10 blur-[100px] rounded-full" />
                 <div className="absolute bottom-[10%] right-[10%] w-[40%] h-[40%] bg-blue-600/10 blur-[100px] rounded-full" />
@@ -158,7 +180,14 @@ function AuthContent() {
                         </div>
 
                         <div className="flex justify-center">
-                            <WalletLoginButton setStep={setStep} setFormData={setFormData} />
+                            <WalletLoginButton
+                                setStep={setStep}
+                                setFormData={setFormData}
+                                onOpenEVM={() => setIsEVMModalOpen(true)}
+                                onOpenSolana={() => setIsSolanaModalOpen(true)}
+                                onOpenBitcoin={() => setIsBitcoinModalOpen(true)}
+                                onOpenSui={() => setIsSuiModalOpen(true)}
+                            />
                         </div>
                     </div>
                 )}
@@ -198,25 +227,80 @@ function AuthContent() {
                 )}
 
                 {step === 3 && (
-                    <WalletConnectStep formData={formData} onBack={() => handleBackToUsername()} onError={(msg) => handleBackToUsername(msg)} />
+                    <WalletConnectStep
+                        formData={formData}
+                        onBack={() => handleBackToUsername()}
+                        onError={(msg) => handleBackToUsername(msg)}
+                        onOpenEVM={() => setIsEVMModalOpen(true)}
+                        onOpenSolana={() => setIsSolanaModalOpen(true)}
+                        onOpenBitcoin={() => setIsBitcoinModalOpen(true)}
+                        onOpenSui={() => setIsSuiModalOpen(true)}
+                    />
                 )}
             </div>
         </div>
     );
 }
 
-function WalletLoginButton({ setStep, setFormData }: { setStep: (step: number) => void, setFormData: React.Dispatch<React.SetStateAction<any>> }) {
-    const { address, isConnected } = useAccount();
-    const { signMessageAsync } = useSignMessage();
+
+
+function WalletLoginButton({
+    setStep,
+    setFormData,
+    onOpenEVM,
+    onOpenSolana,
+    onOpenBitcoin,
+    onOpenSui
+}: {
+    setStep: (step: number) => void,
+    setFormData: React.Dispatch<React.SetStateAction<any>>,
+    onOpenEVM: () => void,
+    onOpenSolana: () => void,
+    onOpenBitcoin: () => void,
+    onOpenSui: () => void
+}) {
+    // EVM
+    const { address: evmAddress, isConnected: isEVMConnected } = useAccount();
+    const { signMessageAsync: signEVM } = useSignMessage();
+
+    // Solana
+    const { publicKey: solanaPublicKey, connected: isSolanaConnected, signMessage: signSolana } = useWallet();
+
+    // Bitcoin
+    const { address: btcAddress, isConnected: isBtcConnected, signMessage: signBitcoin } = useBitcoinWallet();
+
+    // Sui
+    const suiAccount = useCurrentAccount();
+    const { mutateAsync: signSui } = useSignPersonalMessage();
+    const isSuiConnected = !!suiAccount;
+
     const router = useRouter();
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
 
-    const handleLogin = async () => {
-        if (!isConnected || !address) return;
+    const performLogin = async (
+        address: string,
+        chainFamily: ChainFamily,
+        signFn: () => Promise<string>
+    ) => {
         setLoading(true);
+        setError("");
         try {
             const timestamp = Math.floor(Date.now() / 1000);
-            const signature = await signMessageAsync({ message: `{"address":"${address}","timestamp":${timestamp}}` });
+            let signature = "";
+            let message = "";
+
+            if (chainFamily === ChainFamily.EVM || chainFamily === ChainFamily.BITCOIN) {
+                // EVM & BTC usually expect standard string/json structure
+                message = `{"address":"${address}","timestamp":${timestamp}}`;
+                signature = await signFn();
+            } else if (chainFamily === ChainFamily.SOLANA) {
+                // Solana signMessage returns Uint8Array, we need hex/base58
+                // Handled in specific wrapper below or passed signFn returns string
+                signature = await signFn();
+            } else if (chainFamily === ChainFamily.SUI) {
+                signature = await signFn();
+            }
 
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/auth/wallet-login`, {
                 method: "POST",
@@ -224,524 +308,253 @@ function WalletLoginButton({ setStep, setFormData }: { setStep: (step: number) =
                 body: JSON.stringify({
                     address,
                     timestamp,
-                    signature
+                    signature,
+                    chain_family: chainFamily // Backend needs to know family to verify signature
                 })
             });
 
             const data = await res.json();
             if (res.ok) {
                 if (data.status === "success") {
-                    // Login Success
                     localStorage.setItem("user_token", data.token);
                     router.push("/me");
                 } else if (data.status === "signup_needed") {
-                    // Signup Needed
                     setFormData((prev: any) => ({ ...prev, signup_token: data.signup_token }));
                     setStep(2);
                 }
             } else {
                 console.error("Wallet login failed:", data.error);
-                alert(data.error || "Login failed");
+                setError(data.error || "Login failed");
             }
 
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
+            // Handle specific user rejection errors for better UX
+            if (e.message?.includes("User rejected") || e.message?.includes("User denied")) {
+                setError("Request rejected by user.");
+            } else {
+                setError(e.message || "An unexpected error occurred.");
+            }
         } finally {
             setLoading(false);
         }
     };
 
-    if (!isConnected) {
-        return (
-            <div className="w-full flex justify-center">
-                <ConnectButton showBalance={false} chainStatus="none" />
-            </div>
-        )
-    }
+    const handleLoginEVM = async () => {
+        if (!isEVMConnected || !evmAddress) return onOpenEVM();
+        await performLogin(evmAddress, ChainFamily.EVM, async () => {
+            // Reconstruct message inside here if needed or pass logic
+            const timestamp = Math.floor(Date.now() / 1000);
+            return await signEVM({ message: `{"address":"${evmAddress}","timestamp":${timestamp}}` });
+        });
+    };
+
+    const handleLoginSolana = async () => {
+        if (!isSolanaConnected || !solanaPublicKey || !signSolana) return onOpenSolana();
+        await performLogin(solanaPublicKey.toBase58(), ChainFamily.SOLANA, async () => {
+            const timestamp = Math.floor(Date.now() / 1000);
+            const messageStr = `{"address":"${solanaPublicKey.toBase58()}","timestamp":${timestamp}}`;
+            const message = new TextEncoder().encode(messageStr);
+            const signatureBytes = await signSolana(message);
+            // Hex encoded for consistency with other chains if backend supports it, or Base58
+            // Let's use Hex as per previous SolanaLoginButton
+            return Array.from(signatureBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        });
+    };
+
+    const handleLoginBitcoin = async () => {
+        if (!isBtcConnected || !btcAddress || !signBitcoin) return onOpenBitcoin();
+        await performLogin(btcAddress, ChainFamily.BITCOIN, async () => {
+            const timestamp = Math.floor(Date.now() / 1000);
+            return await signBitcoin(`{"address":"${btcAddress}","timestamp":${timestamp}}`);
+        });
+    };
+
+    const handleLoginSui = async () => {
+        if (!isSuiConnected || !suiAccount) return onOpenSui();
+        await performLogin(suiAccount.address, ChainFamily.SUI, async () => {
+            const timestamp = Math.floor(Date.now() / 1000);
+            const messageStr = `{"address":"${suiAccount.address}","timestamp":${timestamp}}`;
+            const msgBytes = new TextEncoder().encode(messageStr);
+            const result = await signSui({ message: msgBytes });
+            return result.signature;
+        });
+    };
+
+    const [isSelectionOpen, setIsSelectionOpen] = useState(false);
+
+    // ... handlers (handleLoginEVM etc) ...
 
     return (
-        <div className="w-full space-y-3">
-            <div className="flex justify-center">
-                <ConnectButton showBalance={false} chainStatus="none" />
-            </div>
+        <>
+            <WalletSelectionModal
+                isOpen={isSelectionOpen}
+                onClose={() => setIsSelectionOpen(false)}
+                onSelectEVM={handleLoginEVM}
+                onSelectSolana={handleLoginSolana}
+                onSelectBitcoin={handleLoginBitcoin}
+                onSelectSui={handleLoginSui}
+            />
+
             <button
-                onClick={handleLogin}
+                onClick={() => setIsSelectionOpen(true)}
                 disabled={loading}
-                className="w-full p-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 font-bold shadow-lg transition-all"
+                className="w-full p-4 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 font-bold shadow-lg transition-all text-white flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98]"
             >
-                {loading ? "Verifying..." : "Sign In with Wallet"}
+                {loading ? "Verifying..." : (
+                    <>
+                        <Wallet size={20} /> Sign In with Wallet
+                    </>
+                )}
             </button>
-        </div>
+
+            {error && (
+                <div className="text-red-400 text-xs text-center px-4 animate-in fade-in slide-in-from-top-2">
+                    {error}
+                </div>
+            )}
+        </>
     );
 }
-
 
 interface FormData {
     username: string;
     signup_token: string;
 }
 
-function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, onBack: () => void, onError: (msg: string) => void }) {
+
+interface WalletConnectStepProps {
+    formData: FormData;
+    onBack: () => void;
+    onError: (msg: string) => void;
+    onOpenEVM: () => void;
+    onOpenSolana: () => void;
+    onOpenBitcoin: () => void;
+    onOpenSui: () => void;
+}
+
+function WalletConnectStep({ formData, onBack, onError, onOpenEVM, onOpenSolana, onOpenBitcoin, onOpenSui }: WalletConnectStepProps) {
     const { address, isConnected } = useAccount();
+    const { disconnect } = useDisconnect();
     const { publicKey, connected: solanaConnected } = useWallet();
+    const { address: btcAddress, isConnected: btcConnected } = useBitcoinWallet();
+    const currentSuiAccount = useCurrentAccount();
+    const suiConnected = !!currentSuiAccount;
+
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [showSessionExpired, setShowSessionExpired] = useState(false);
 
     // Preferences
     const [selectedChainId, setSelectedChainId] = useState<number>(evmChains[0]?.id || 1);
-    const [selectedAsset, setSelectedAsset] = useState<{ symbol: string; address: string; logo?: string; name?: string } | null>(null);
-    const [chainDropdownOpen, setChainDropdownOpen] = useState(false);
-    const [assetDropdownOpen, setAssetDropdownOpen] = useState(false);
-    const [chainSearch, setChainSearch] = useState("");
-    const [assetSearch, setAssetSearch] = useState("");
-    const [tokens, setTokens] = useState<any[]>([]);
-
-    // Custom Token Import Logic
-    const [customToken, setCustomToken] = useState<any>(null);
+    const [selectedAsset, setSelectedAsset] = useState<Token | null>(null);
 
     // Select chain object
     const selectedChain = allChains.find(c => c.id === selectedChainId);
 
-    // Determine validity based on family
-    const isValidInputInfo = selectedChain ? isValidAddress(assetSearch, selectedChain.family) : false;
-    const isEVM = selectedChain?.family === ChainFamily.EVM;
-
-    // EVM: Use Wagmi
-    const { data: customTokenData } = useReadContracts({
-        contracts: [
-            {
-                address: (isValidInputInfo && isEVM) ? assetSearch as `0x${string}` : undefined,
-                abi: erc20Abi,
-                functionName: 'symbol',
-                chainId: selectedChainId,
-            },
-            {
-                address: (isValidInputInfo && isEVM) ? assetSearch as `0x${string}` : undefined,
-                abi: erc20Abi,
-                functionName: 'name',
-                chainId: selectedChainId,
-            },
-            {
-                address: (isValidInputInfo && isEVM) ? assetSearch as `0x${string}` : undefined,
-                abi: erc20Abi,
-                functionName: 'decimals',
-                chainId: selectedChainId,
-            }
-        ],
-        query: {
-            enabled: !!isValidInputInfo && isEVM && !tokens.some(t => t.address.toLowerCase() === assetSearch.toLowerCase()),
-            retry: false
-        }
-    });
-
-    useEffect(() => {
-        if (customTokenData && customTokenData[0]?.result && customTokenData[1]?.result && customTokenData[2]?.result !== undefined) {
-            setCustomToken({
-                address: assetSearch as `0x${string}`,
-                symbol: customTokenData[0].result as string,
-                name: customTokenData[1].result as string,
-                decimals: Number(customTokenData[2].result),
-                logo: undefined
-            });
-        }
-    }, [customTokenData, assetSearch]);
-
-    // Non-EVM (Solana/Sui/BTC) Effect - Using DexScreener
-    useEffect(() => {
-        if (isValidInputInfo && !isEVM && !tokens.some(t => t.address.toLowerCase() === assetSearch.toLowerCase())) {
-            // Fetch from DexScreener
-            fetch(`https://api.dexscreener.com/latest/dex/tokens/${assetSearch}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.pairs && data.pairs.length > 0) {
-                        const pair = data.pairs[0];
-                        const baseToken = pair.baseToken;
-                        setCustomToken({
-                            address: baseToken.address,
-                            symbol: baseToken.symbol,
-                            name: baseToken.name,
-                            decimals: 9, // DexScreener doesn't always return decimals
-                            logo: undefined
-                        });
-                    }
-                })
-                .catch(err => console.error("Failed to fetch non-evm token", err));
-        } else if (!isValidInputInfo) {
-            setCustomToken(null);
-        }
-    }, [assetSearch, isValidInputInfo, isEVM, tokens]);
-
     const handleChainSelect = (chainId: number) => {
-        const newChain = allChains.find(c => c.id === chainId);
-
         setSelectedChainId(chainId);
-        setChainDropdownOpen(false);
-        setChainSearch("");
-
-        if (newChain) {
-            const native = {
-                symbol: newChain.nativeToken.symbol,
-                address: newChain.nativeToken.address,
-                logo: newChain.nativeToken.logoURI,
-                name: newChain.nativeToken.name,
-                decimals: newChain.nativeToken.decimals
-            };
-            // Reset asset to native
-            setSelectedAsset(native);
-            setTokens([native]);
-        }
     };
-
-
-    // Initialize Default Asset (Native) when chain changes
-    useEffect(() => {
-        const chain = allChains.find(c => c.id === selectedChainId);
-        if (chain) {
-            const native = {
-                symbol: chain.nativeToken.symbol,
-                address: chain.nativeToken.address, // Usually 0x00..00
-                logo: chain.nativeToken.logoURI,
-                name: chain.nativeToken.name,
-                decimals: chain.nativeToken.decimals
-            };
-
-            // Only fetch LiFi tokens if it's an EVM chain
-            if (chain.family === ChainFamily.EVM) {
-                fetch(`https://li.quest/v1/tokens?chains=${selectedChainId}`)
-                    .then(res => res.json())
-                    .then(data => {
-                        let newTokens = [native];
-                        if (data.tokens && data.tokens[selectedChainId]) {
-                            const extraTokens = data.tokens[selectedChainId]
-                                .filter((t: { address: string }) => t.address !== "0x0000000000000000000000000000000000000000")
-                                .map((t: { symbol: string, name: string, address: string, logoURI: string, decimals: number }) => ({
-                                    symbol: t.symbol,
-                                    name: t.name,
-                                    address: t.address,
-                                    logo: t.logoURI,
-                                    decimals: t.decimals
-                                }));
-                            newTokens = [...newTokens, ...extraTokens];
-                        }
-                        setTokens(newTokens);
-                        // If current selection is invalid for new chain, it was already reset in handleChainSelect to native.
-                        // But if we just loaded, ensure selectedAsset is set
-                        setSelectedAsset(prev => prev && prev.symbol === native.symbol ? prev : native);
-                    })
-                    .catch(err => {
-                        console.error("Failed to fetch tokens", err);
-                        setTokens([native]);
-                        setSelectedAsset(native);
-                    });
-            } else if (chain.family === ChainFamily.SOLANA) {
-                // Fetch from Jupiter Strict List via Proxy
-                fetch('/api/jupiter/tokens')
-                    .then(res => {
-                        if (!res.ok) throw new Error("Failed to fetch");
-                        return res.json();
-                    })
-                    .then(data => {
-                        // Data is array of { address, chainId, decimals, name, symbol, logoURI }
-                        const solTokens = data.slice(0, 100).map((t: any) => ({
-                            symbol: t.symbol,
-                            name: t.name,
-                            address: t.address,
-                            logo: t.logoURI,
-                            decimals: t.decimals
-                        }));
-                        let newTokens = [native, ...solTokens];
-                        setTokens(newTokens);
-                        setSelectedAsset(prev => prev && prev.symbol === native.symbol ? prev : native);
-                    })
-                    .catch(err => {
-                        console.error("Failed to fetch Solana tokens", err);
-                        setTokens([native]);
-                        setSelectedAsset(native);
-                    });
-            } else {
-                // Non-EVM, just native for now unless we have a manual list
-                setTokens([native]);
-                setSelectedAsset(native);
-            }
-        }
-    }, [selectedChainId]);
 
     const handleFinish = async () => {
         setLoading(true);
         try {
             // Determine active address based on chain family
             let finalAddress = "";
-            let isMainWallet = false;
 
             if (selectedChain?.family === ChainFamily.SOLANA) {
                 if (solanaConnected && publicKey) {
                     finalAddress = publicKey.toBase58();
-                    isMainWallet = true;
                 }
-            } else {
+            } else if (selectedChain?.family === ChainFamily.EVM) {
                 if (isConnected && address) {
                     finalAddress = address;
-                    isMainWallet = true;
+                }
+            } else if (selectedChain?.family === ChainFamily.BITCOIN) {
+                if (btcConnected && btcAddress) {
+                    finalAddress = btcAddress;
+                }
+            } else if (selectedChain?.family === ChainFamily.SUI) {
+                if (suiConnected && currentSuiAccount) {
+                    finalAddress = currentSuiAccount.address;
                 }
             }
 
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/auth/signup`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    username: formData.username,
-                    signup_token: formData.signup_token,
-                    eth_address: finalAddress,
-                    main_wallet: isMainWallet,
-                    // New Preferences
-                    preferred_chain_id: selectedChainId,
-                    preferred_asset_address: selectedAsset?.address || "0x0000000000000000000000000000000000000000"
-                })
-            });
+            if (!finalAddress) {
+                throw new Error("Please connect your wallet first.");
+            }
 
-            const data = await res.json();
-            if (res.ok) {
-                localStorage.setItem("user_token", data.token);
-                router.push("/me");
-            } else {
-                if (res.status === 401) {
-                    setShowSessionExpired(true);
-                    return;
+            if (formData.signup_token) {
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/auth/signup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        signup_token: formData.signup_token,
+                        username: formData.username,
+                        eth_address: finalAddress,
+                        main_wallet: true,
+                        preferred_chain_id: selectedChainId,
+                        preferred_asset_address: selectedAsset?.address || ""
+                    })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.error || "Registration failed");
                 }
-                if (res.status === 409 || data.error?.includes("already taken") || data.error?.includes("Username")) {
-                    onError("Username already taken or invalid");
+
+                if (data.token) {
+                    localStorage.setItem("user_token", data.token);
+                    router.push("/me");
                 } else {
-                    alert("Signup failed: " + data.error);
+                    throw new Error("No session token received");
                 }
+            } else {
+                // If we are here without a signup token, something is wrong with the flow
+                // But for now, if they are just connecting a wallet to start a flow?
+                // No, Auth page is for finding an account.
+                // If they are here, they simply must have a token.
+                throw new Error("Session expired or invalid. Please start over.");
             }
-        } catch (e) {
+
+        } catch (e: any) {
             console.error(e);
-            alert("An error occurred");
+            onError(e.message || "Failed to setup wallet");
         } finally {
             setLoading(false);
         }
     };
 
-    // Grouping chains for dropdown
-    const groupedChains = chainFamilies.map(family => ({
-        family,
-        chains: allChains.filter(c => c.family === family)
-    }));
+
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 text-center">
-            <SessionExpiredModal
-                isOpen={showSessionExpired}
-                onClose={() => {
-                    setShowSessionExpired(false);
-                    router.push("/auth");
-                }}
+            <div className="text-center mb-6">
+                <h2 className="text-3xl font-bold mb-2">Connect Wallet</h2>
+                <p className="text-zinc-400 text-sm">Link your wallet to receive tips directly to your address</p>
+            </div>
+
+            {/* Network Selector */}
+            <WalletNetworkSelector
+                selectedChainId={selectedChainId}
+                onChainSelect={handleChainSelect}
+                selectedAsset={selectedAsset}
+                onAssetSelect={setSelectedAsset}
             />
-            <div>
-                <h2 className="text-2xl font-bold mb-2">Connect Wallet</h2>
-                <p className="text-zinc-400 text-sm">Link your Ethereum wallet to receive tips directly.</p>
-            </div>
 
-            {/* Network & Asset Selection (Always Visible) */}
-            <div className="space-y-3 text-left">
-                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block">Preferred Network for Tips</label>
-
-                {/* Chain Selector */}
-                <div className="relative">
-                    <button
-                        type="button"
-                        onClick={() => setChainDropdownOpen(!chainDropdownOpen)}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none flex items-center justify-between"
-                    >
-                        <div className="flex items-center gap-2">
-                            {selectedChain?.logoURI && <img src={selectedChain.logoURI} alt={selectedChain.name} className="w-5 h-5 rounded-full" />}
-                            <span>{selectedChain?.name || "Select Chain"}</span>
-                        </div>
-                        <ChevronDown size={16} className={`text-zinc-500 ${chainDropdownOpen ? "rotate-180" : ""}`} />
-                    </button>
-
-                    {chainDropdownOpen && (
-                        <div className="absolute top-0 left-0 right-0 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl z-20 max-h-60 overflow-hidden flex flex-col">
-                            <div className="p-2 border-b border-zinc-800 sticky top-0 bg-zinc-900 z-10">
-                                <input
-                                    type="text"
-                                    placeholder="Search network..."
-                                    value={chainSearch}
-                                    onChange={(e) => setChainSearch(e.target.value)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                    autoFocus
-                                />
-                            </div>
-                            <div className="overflow-y-auto max-h-48">
-                                {groupedChains.map(group => {
-                                    const filteredChains = group.chains.filter(c => c.name.toLowerCase().includes(chainSearch.toLowerCase()));
-                                    if (filteredChains.length === 0) return null;
-
-                                    return (
-                                        <div key={group.family}>
-                                            <div className="px-4 py-2 text-xs font-bold text-zinc-500 bg-zinc-900/50 uppercase tracking-wider sticky top-0">
-                                                {group.family}
-                                            </div>
-                                            {filteredChains.map(c => (
-                                                <button
-                                                    key={c.id}
-                                                    type="button"
-                                                    onClick={() => handleChainSelect(c.id)}
-                                                    className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-2"
-                                                >
-                                                    <img src={c.logoURI} alt={c.name} className="w-5 h-5 rounded-full" />
-                                                    <span>{c.name}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    );
-                                })}
-                                {allChains.filter(c => c.name.toLowerCase().includes(chainSearch.toLowerCase())).length === 0 && (
-                                    <div className="px-4 py-3 text-zinc-500 text-sm italic">No networks found</div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                    {chainDropdownOpen && <div className="fixed inset-0 z-10" onClick={() => setChainDropdownOpen(false)} />}
-                </div>
-
-                {/* Asset Selector */}
-                <div className="relative">
-                    <button
-                        type="button"
-                        onClick={() => setAssetDropdownOpen(!assetDropdownOpen)}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none flex items-center justify-between"
-                    >
-                        <div className="flex items-center gap-2">
-                            {selectedAsset?.logo ? <img src={selectedAsset.logo} className="w-5 h-5 rounded-full" /> : <Coins size={16} className="text-zinc-500" />}
-                            <span>{selectedAsset?.symbol || "Select Asset"}</span>
-                        </div>
-                        <ChevronDown size={16} className={`text-zinc-500 ${assetDropdownOpen ? "rotate-180" : ""}`} />
-                    </button>
-
-                    {assetDropdownOpen && (
-                        <div className="absolute top-0 left-0 right-0 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl z-20 max-h-60 overflow-hidden flex flex-col">
-                            <div className="p-2 border-b border-zinc-800 sticky top-0 bg-zinc-900 z-10">
-                                <input
-                                    type="text"
-                                    placeholder="Search asset..."
-                                    value={assetSearch}
-                                    onChange={(e) => setAssetSearch(e.target.value)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                    autoFocus
-                                />
-                            </div>
-                            <div className="overflow-y-auto max-h-48">
-                                {(() => {
-                                    const filtered = tokens
-                                        .filter(t => t.symbol.toLowerCase().includes(assetSearch.toLowerCase()) || t.name.toLowerCase().includes(assetSearch.toLowerCase()) || t.address.toLowerCase() === assetSearch.toLowerCase());
-
-                                    if (customToken && assetSearch && customToken.address.toLowerCase() === assetSearch.toLowerCase() && !filtered.some(t => t.address.toLowerCase() === customToken.address.toLowerCase())) {
-                                        filtered.push(customToken);
-                                    }
-
-                                    return filtered.slice(0, 100).map((t, idx) => (
-                                        <button
-                                            key={`${t.symbol}-${idx}`}
-                                            type="button"
-                                            onClick={() => { setSelectedAsset(t); setAssetDropdownOpen(false); setAssetSearch(""); }}
-                                            className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-2"
-                                        >
-                                            {t.logo ? <img src={t.logo} className="w-5 h-5 rounded-full" /> : <Coins size={16} />}
-                                            <div className="flex flex-col text-left">
-                                                <span className="text-sm font-medium">{t.symbol}</span>
-                                                <span className="text-xs text-zinc-500">{t.name}</span>
-                                            </div>
-                                        </button>
-                                    ));
-                                })()}
-                                {tokens.filter(t => t.symbol.toLowerCase().includes(assetSearch.toLowerCase()) || t.name.toLowerCase().includes(assetSearch.toLowerCase()) || t.address.toLowerCase() === assetSearch.toLowerCase()).length === 0 && !customToken && (
-                                    <div className="px-4 py-3 text-zinc-500 text-sm italic">No assets found</div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                    {assetDropdownOpen && <div className="fixed inset-0 z-10" onClick={() => setAssetDropdownOpen(false)} />}
-                </div>
-            </div>
-
+            {/* Wallet Button */}
             <div className="flex justify-center py-2">
-                {selectedChain?.family === ChainFamily.SOLANA ? (
-                    <div className="w-full flex justify-center">
-                        <CustomSolanaConnectButton />
-                    </div>
-                ) : (
-                    <ConnectButton.Custom>
-                        {({
-                            account,
-                            chain,
-                            openAccountModal,
-                            openChainModal,
-                            openConnectModal,
-                            authenticationStatus,
-                            mounted,
-                        }) => {
-                            const ready = mounted && authenticationStatus !== 'loading';
-                            const connected =
-                                ready &&
-                                account &&
-                                chain &&
-                                (!authenticationStatus ||
-                                    authenticationStatus === 'authenticated');
-
-                            return (
-                                <div
-                                    {...(!ready && {
-                                        'aria-hidden': true,
-                                        'style': {
-                                            opacity: 0,
-                                            pointerEvents: 'none',
-                                            userSelect: 'none',
-                                        },
-                                    })}
-                                    className="w-full"
-                                >
-                                    {(() => {
-                                        if (!connected) {
-                                            return (
-                                                <button onClick={openConnectModal} type="button" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg shadow-blue-900/20">
-                                                    Connect Wallet
-                                                </button>
-                                            );
-                                        }
-
-                                        if (chain.unsupported) {
-                                            return (
-                                                <button onClick={openChainModal} type="button" className="w-full bg-red-500 hover:bg-red-400 text-white font-bold py-3 px-4 rounded-xl transition-all">
-                                                    Wrong network
-                                                </button>
-                                            );
-                                        }
-
-                                        return (
-                                            <button onClick={openAccountModal} type="button" className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-center gap-3 transition-all hover:bg-zinc-900">
-                                                {account.ensAvatar ? (
-                                                    <img src={account.ensAvatar} alt="ENS Avatar" className="w-6 h-6 rounded-full" />
-                                                ) : (
-                                                    <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-[10px] font-bold">
-                                                        {account.displayName ? account.displayName[0] : "W"}
-                                                    </div>
-                                                )}
-                                                <span className="font-medium text-lg text-xs break-all">{account.address}</span>
-                                                <ChevronDown size={16} className="text-zinc-500" />
-                                            </button>
-                                        );
-                                    })()}
-                                </div>
-                            );
-                        }}
-                    </ConnectButton.Custom>
-                )}
+                <WalletConnectButton
+                    chainFamily={selectedChain?.family || ChainFamily.EVM}
+                    onOpenSolana={onOpenSolana}
+                    onOpenBitcoin={onOpenBitcoin}
+                    onOpenSui={onOpenSui}
+                    onOpenEVM={onOpenEVM}
+                    showFullAddress={true}
+                    showIcon={false}
+                />
             </div>
-
 
             <div className="space-y-3">
                 <button
@@ -757,7 +570,7 @@ function WalletConnectStep({ formData, onBack, onError }: { formData: FormData, 
                     ) : "Finish Setup"}
                 </button>
 
-                {!isConnected && !solanaConnected && (
+                {!isConnected && !solanaConnected && !btcConnected && !suiConnected && (
                     <button
                         onClick={() => handleFinish()}
                         className="text-zinc-500 hover:text-zinc-300 text-sm"
@@ -800,33 +613,6 @@ function SessionExpiredModal({ isOpen, onClose }: { isOpen: boolean, onClose: ()
     );
 }
 
-function CustomSolanaConnectButton() {
-    const { setVisible } = useWalletModal();
-    const { publicKey, connected, wallet } = useWallet();
 
-    if (!connected) {
-        return (
-            <button
-                onClick={() => setVisible(true)}
-                type="button"
-                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg shadow-blue-900/20"
-            >
-                Connect Wallet
-            </button>
-        );
-    }
 
-    return (
-        <button
-            onClick={() => setVisible(true)}
-            type="button"
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white flex items-center justify-center gap-3 transition-all hover:bg-zinc-900"
-        >
-            <div className="w-6 h-6 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center text-[10px] font-bold">
-                {wallet?.adapter.icon ? <img src={wallet.adapter.icon} className="w-6 h-6 rounded-full" alt="Wallet" /> : "S"}
-            </div>
-            <span className="font-medium text-lg text-xs break-all">{publicKey?.toBase58()}</span>
-            <ChevronDown size={16} className="text-zinc-500" />
-        </button>
-    );
-}
+

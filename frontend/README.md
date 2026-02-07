@@ -1,6 +1,6 @@
 # Streamer Tipping Platform - Frontend
 
-This is the frontend application for the Streamer Tipping Platform, built with Next.js, Tailwind CSS, and RainbowKit. It allows users to sign up, manage their profiles, and send crypto tips to streamers.
+This is the frontend application for the Streamer Tipping Platform, built with Next.js and Tailwind CSS. It allows users to sign up, manage their profiles, and send crypto tips to streamers.
 
 ## Prerequisites
 

@@ -10,10 +10,7 @@ import { Check, ChevronDown, Wallet, Coins, AlertTriangle } from "lucide-react";
 import { allChains, ChainFamily } from "@/config/chains";
 import { WalletNetworkSelector } from "./WalletNetworkSelector";
 import { WalletConnectButton } from "./WalletConnectButton";
-import { CustomSolanaWalletModal } from "./CustomSolanaWalletModal";
-import { CustomBitcoinWalletModal } from "./CustomBitcoinWalletModal";
-import { CustomSuiWalletModal } from "./CustomSuiWalletModal";
-import { CustomEVMWalletModal } from "./CustomEVMWalletModal";
+import { WalletConnectionModals } from "./WalletConnectionModals";
 import { Token } from "@/hooks/useTokenList";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useBitcoinWallet } from "@/contexts/BitcoinWalletContext";
@@ -385,10 +382,16 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
             </div>
 
             {/* Modals */}
-            <CustomSolanaWalletModal isOpen={isSolanaModalOpen} onClose={() => setIsSolanaModalOpen(false)} />
-            <CustomBitcoinWalletModal isOpen={isBitcoinModalOpen} onClose={() => setIsBitcoinModalOpen(false)} />
-            <CustomSuiWalletModal isOpen={isSuiModalOpen} onClose={() => setIsSuiModalOpen(false)} />
-            <CustomEVMWalletModal isOpen={isEVMModalOpen} onClose={() => setIsEVMModalOpen(false)} />
+            <WalletConnectionModals
+                isSolanaOpen={isSolanaModalOpen}
+                onSolanaClose={() => setIsSolanaModalOpen(false)}
+                isBitcoinOpen={isBitcoinModalOpen}
+                onBitcoinClose={() => setIsBitcoinModalOpen(false)}
+                isSuiOpen={isSuiModalOpen}
+                onSuiClose={() => setIsSuiModalOpen(false)}
+                isEVMOpen={isEVMModalOpen}
+                onEVMClose={() => setIsEVMModalOpen(false)}
+            />
         </div>
     );
 }

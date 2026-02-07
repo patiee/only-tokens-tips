@@ -1,5 +1,5 @@
-import { getDefaultConfig } from "@rainbow-me/rainbowkit";
-import { http, type Transport } from "wagmi";
+import { createConfig, http, type Transport } from "wagmi";
+import { injected, walletConnect } from "wagmi/connectors";
 import { evmChains } from "./generated-chains";
 import { type Chain } from "viem";
 
@@ -26,10 +26,12 @@ const transports = evmChains.reduce((acc, c) => {
     return acc;
 }, {} as Record<number, Transport>);
 
-export const config = getDefaultConfig({
-    appName: "Stream Tips",
-    projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "YOUR_PROJECT_ID",
+export const config = createConfig({
     chains: chains,
     transports: transports,
     ssr: true,
+    connectors: [
+        injected(),
+        walletConnect({ projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "YOUR_PROJECT_ID" }),
+    ],
 });

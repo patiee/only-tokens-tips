@@ -1,8 +1,6 @@
 "use client";
 
-import "@rainbow-me/rainbowkit/styles.css";
 import "@mysten/dapp-kit/dist/index.css";
-import { RainbowKitProvider } from "@rainbow-me/rainbowkit";
 import { WagmiProvider } from "wagmi";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -28,17 +26,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return (
         <WagmiProvider config={config}>
             <QueryClientProvider client={queryClient}>
-                <SuiClientProvider networks={networkConfig} defaultNetwork="mainnet">
-                    <SuiWalletProvider>
-                        <BitcoinWalletProvider>
-                            <SolanaProvider>
-                                <RainbowKitProvider>
-                                    {children}
-                                </RainbowKitProvider>
-                            </SolanaProvider>
-                        </BitcoinWalletProvider>
-                    </SuiWalletProvider>
-                </SuiClientProvider>
+                <BitcoinWalletProvider>
+                    <SolanaProvider>
+                        <SuiClientProvider networks={networkConfig} defaultNetwork="mainnet">
+                            <SuiWalletProvider>
+                                {children}
+                            </SuiWalletProvider>
+                        </SuiClientProvider>
+                    </SolanaProvider>
+                </BitcoinWalletProvider>
             </QueryClientProvider>
         </WagmiProvider>
     );

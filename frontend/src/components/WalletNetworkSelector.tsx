@@ -154,7 +154,7 @@ export function WalletNetworkSelector({
     }, [tokens, assetSearch, customToken]);
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 text-left">
             {/* Chain Selector */}
             <div className="space-y-2 relative">
                 <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">Network</label>
