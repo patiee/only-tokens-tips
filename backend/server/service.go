@@ -1,10 +1,13 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -288,24 +291,15 @@ func (s *Service) monitorTransaction(tipID uint, chainID, txHash, sender, amount
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 	defer cancel()
 
-	ticker := time.NewTicker(5 * time.Second) // Poll every 5s
+	ticker := time.NewTicker(10 * time.Second) // Poll every 10s (relaxed)
 	defer ticker.Stop()
 
-	// Connect to RPC
 	rpcURL, ok := ChainRPCs[chainID]
 	if !ok {
 		s.logger.Printf("Unsupported chain ID for monitoring: %s", chainID)
 		s.db.UpdateTipStatus(tipID, "failed")
 		return
 	}
-
-	client, err := ethclient.Dial(rpcURL)
-	if err != nil {
-		s.logger.Printf("Failed to dial RPC for monitoring: %v", err)
-		s.db.UpdateTipStatus(tipID, "failed")
-		return
-	}
-	defer client.Close()
 
 	for {
 		select {
@@ -314,14 +308,23 @@ func (s *Service) monitorTransaction(tipID uint, chainID, txHash, sender, amount
 			s.db.UpdateTipStatus(tipID, "failed")
 			return
 		case <-ticker.C:
-			// Check Receipt
-			verified, err := s.checkTxStatus(client, txHash, sender)
+			var verified bool
+			var err error
+
+			switch chainID {
+			case "100001": // Bitcoin
+				verified, err = s.checkBitcoinTx(rpcURL, txHash, amount)
+			case "100002": // Solana
+				verified, err = s.checkSolanaTx(rpcURL, txHash, sender)
+			case "100003": // Sui
+				verified, err = s.checkSuiTx(rpcURL, txHash, sender)
+			default: // EVM
+				verified, err = s.checkEvmTx(rpcURL, txHash, sender)
+			}
+
 			if err != nil {
 				// Special case: If error is strictly "not found", we keep waiting (pending)
-				// If error is "failed" (status 0) or sender mismatch, we stop.
-
 				if errors.Is(err, ErrTxNotFound) {
-					// Still pending, continue polling
 					continue
 				}
 
@@ -347,8 +350,14 @@ func (s *Service) monitorTransaction(tipID uint, chainID, txHash, sender, amount
 	}
 }
 
-// checkTxStatus checks validity in a single pass
-func (s *Service) checkTxStatus(client *ethclient.Client, txHash string, expectedSender string) (bool, error) {
+// checkEvmTx checks validity for EVM chains
+func (s *Service) checkEvmTx(rpcURL string, txHash string, expectedSender string) (bool, error) {
+	client, err := ethclient.Dial(rpcURL)
+	if err != nil {
+		return false, fmt.Errorf("failed to connect to RPC: %v", err)
+	}
+	defer client.Close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -365,7 +374,7 @@ func (s *Service) checkTxStatus(client *ethclient.Client, txHash string, expecte
 		return false, fmt.Errorf("transaction failed (status: 0)")
 	}
 
-	// 2. Check Sender (Re-verify strictness)
+	// 2. Check Sender
 	tx, _, err := client.TransactionByHash(ctx, hash)
 	if err != nil {
 		return false, fmt.Errorf("failed to get tx details: %v", err)
@@ -378,6 +387,189 @@ func (s *Service) checkTxStatus(client *ethclient.Client, txHash string, expecte
 
 	if !strings.EqualFold(from.Hex(), expectedSender) {
 		return false, fmt.Errorf("%w: tx.from=%s, expected=%s", ErrSenderMismatch, from.Hex(), expectedSender)
+	}
+
+	return true, nil
+}
+
+// checkBitcoinTx checks validity via Mempool.space API
+func (s *Service) checkBitcoinTx(apiURL string, txHash string, expectedAmount string) (bool, error) {
+	// GET /tx/:txid/status
+	resp, err := http.Get(fmt.Sprintf("%s/tx/%s/status", apiURL, txHash))
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return false, ErrTxNotFound
+	}
+
+	if resp.StatusCode != 200 {
+		return false, fmt.Errorf("API error: %d", resp.StatusCode)
+	}
+
+	var status struct {
+		Confirmed   bool   `json:"confirmed"`
+		BlockHash   string `json:"block_hash"`
+		BlockHeight int    `json:"block_height"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		return false, err
+	}
+
+	if !status.Confirmed {
+		return false, ErrTxNotFound // Treat unconfirmed as not found/pending for our logic
+	}
+
+	return true, nil
+}
+
+// checkSolanaTx checks validity via Solana JSON-RPC
+func (s *Service) checkSolanaTx(rpcURL string, txHash string, expectedSender string) (bool, error) {
+	payload := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "getTransaction",
+		"params": []interface{}{
+			txHash,
+			map[string]interface{}{
+				"encoding":                       "jsonParsed",
+				"maxSupportedTransactionVersion": 0,
+			},
+		},
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return false, err
+	}
+
+	resp, err := http.Post(rpcURL, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Result *struct {
+			Meta *struct {
+				Err interface{} `json:"err"`
+			} `json:"meta"`
+			Transaction *struct {
+				Message *struct {
+					AccountKeys []struct {
+						Pubkey string `json:"pubkey"`
+						Signer bool   `json:"signer"`
+					} `json:"accountKeys"`
+				} `json:"message"`
+			} `json:"transaction"`
+		} `json:"result"`
+		Error *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return false, err
+	}
+
+	if result.Error != nil {
+		return false, fmt.Errorf("RPC error: %s", result.Error.Message)
+	}
+
+	if result.Result == nil {
+		return false, ErrTxNotFound
+	}
+
+	if result.Result.Meta.Err != nil {
+		return false, fmt.Errorf("transaction failed on-chain")
+	}
+
+	// Check Sender (First signer)
+	if result.Result.Transaction != nil && result.Result.Transaction.Message != nil {
+		for _, key := range result.Result.Transaction.Message.AccountKeys {
+			if key.Signer {
+				if key.Pubkey == expectedSender {
+					return true, nil
+				}
+				if key.Pubkey == expectedSender {
+					return true, nil
+				}
+			}
+		}
+		return false, fmt.Errorf("%w: expected %s", ErrSenderMismatch, expectedSender)
+	}
+
+	return true, nil
+}
+
+// checkSuiTx checks validity via Sui JSON-RPC
+func (s *Service) checkSuiTx(rpcURL string, txHash string, expectedSender string) (bool, error) {
+	payload := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "sui_getTransactionBlock",
+		"params": []interface{}{
+			txHash,
+			map[string]interface{}{
+				"showEffects": true,
+				"showInput":   true,
+			},
+		},
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return false, err
+	}
+
+	resp, err := http.Post(rpcURL, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Result *struct {
+			Effects *struct {
+				Status struct {
+					Status string `json:"status"`
+					Error  string `json:"error"`
+				} `json:"status"`
+			} `json:"effects"`
+			Transaction *struct {
+				Data *struct {
+					Sender string `json:"sender"`
+				} `json:"data"`
+			} `json:"transaction"`
+		} `json:"result"`
+		Error *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return false, err
+	}
+
+	if result.Error != nil {
+		return false, ErrTxNotFound
+	}
+
+	if result.Result == nil {
+		return false, ErrTxNotFound
+	}
+
+	if result.Result.Effects.Status.Status != "success" {
+		return false, fmt.Errorf("transaction failed: %s", result.Result.Effects.Status.Error)
+	}
+
+	if result.Result.Transaction.Data.Sender != expectedSender {
+		return false, fmt.Errorf("%w: expected %s, got %s", ErrSenderMismatch, expectedSender, result.Result.Transaction.Data.Sender)
 	}
 
 	return true, nil
