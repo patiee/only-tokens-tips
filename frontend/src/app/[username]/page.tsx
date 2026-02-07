@@ -20,6 +20,11 @@ interface PublicUserProfile {
     background_url?: string;
     provider?: string;
     connected_providers?: string[];
+    widget_tts?: boolean;
+    widget_bg_color?: string;
+    widget_user_color?: string;
+    widget_amount_color?: string;
+    widget_message_color?: string;
 }
 
 export default function TipPage() {
@@ -140,13 +145,7 @@ export default function TipPage() {
                                         />
                                     </div>
                                 </div>
-                                {user.provider && (
-                                    <div className="absolute bottom-1 right-1 bg-black rounded-full p-1 border border-zinc-800" title={`Verified on ${user.provider}`}>
-                                        {user.provider === 'twitch' && <div className="w-6 h-6 bg-[#9146FF] rounded-full flex items-center justify-center text-white text-[10px] font-bold">Tw</div>}
-                                        {user.provider === 'kick' && <div className="w-6 h-6 bg-[#53FC18] rounded-full flex items-center justify-center text-black text-[10px] font-bold">K</div>}
-                                        {user.provider === 'google' && <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center text-black text-[10px] font-bold">G</div>}
-                                    </div>
-                                )}
+
                             </div>
 
                             <div className="space-y-2">
@@ -178,7 +177,7 @@ export default function TipPage() {
 
                         <div className="w-full h-px bg-white/5 mb-8" />
 
-                        <div className="space-y-2 mb-4">
+                        <div className="space-y-2 mb-10">
                             <h2 className="text-lg font-bold text-white">
                                 Send a Tip
                             </h2>
@@ -194,6 +193,13 @@ export default function TipPage() {
                                 onStatus={setStatus}
                                 preferredChainId={user.preferred_chain_id}
                                 preferredAssetAddress={user.preferred_asset_address}
+                                widgetConfig={{
+                                    tts_enabled: user.widget_tts ?? false,
+                                    background_color: user.widget_bg_color || "rgba(24, 24, 27, 0.8)",
+                                    user_color: user.widget_user_color || "#ffffff",
+                                    amount_color: user.widget_amount_color || "#a855f7",
+                                    message_color: user.widget_message_color || "#ffffff",
+                                }}
                             />
                         </ErrorBoundary>
                     </div>

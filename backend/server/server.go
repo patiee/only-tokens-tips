@@ -336,6 +336,11 @@ func (s *Server) HandleGetUser(c *gin.Context) {
 		"provider":                user.Provider,
 		"connected_providers":     connectedProviders,
 		"wallet_address":          user.WalletAddress,
+		"widget_tts":              user.WidgetTTS,
+		"widget_bg_color":         user.WidgetBgColor,
+		"widget_user_color":       user.WidgetUserColor,
+		"widget_amount_color":     user.WidgetAmountColor,
+		"widget_message_color":    user.WidgetMessageColor,
 	})
 }
 
