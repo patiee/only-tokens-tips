@@ -37,6 +37,14 @@ func (d *Database) Init(dsn string) (err error) {
 	return d.conn.AutoMigrate(&model.User{}, &model.Tip{}, &model.UsedSignature{}, &model.WalletSession{}, &model.UserSession{})
 }
 
+func (d *Database) GetUserByID(id uint) (user *model.User, err error) {
+	user = &model.User{}
+	if err = d.conn.First(user, id).Error; err != nil {
+		return nil, err
+	}
+	return
+}
+
 func (d *Database) GetUserByUsername(username string) (user *model.User, err error) {
 	user = &model.User{}
 	if err = d.conn.Where("username = ?", username).First(user).Error; err != nil {
@@ -47,10 +55,39 @@ func (d *Database) GetUserByUsername(username string) (user *model.User, err err
 
 func (d *Database) GetUserByProviderID(provider, providerID string) (user *model.User, err error) {
 	user = &model.User{}
-	if err = d.conn.Where("provider = ? AND provider_id = ?", provider, providerID).First(user).Error; err != nil {
+	query := d.conn
+
+	switch provider {
+	case "google":
+		query = query.Where("google_id = ? OR (provider = 'google' AND provider_id = ?)", providerID, providerID)
+	case "twitch":
+		query = query.Where("twitch_id = ? OR (provider = 'twitch' AND provider_id = ?)", providerID, providerID)
+	case "kick":
+		query = query.Where("kick_id = ? OR (provider = 'kick' AND provider_id = ?)", providerID, providerID)
+	default:
+		query = query.Where("provider = ? AND provider_id = ?", provider, providerID)
+	}
+
+	if err = query.First(user).Error; err != nil {
 		return nil, err
 	}
 	return
+}
+
+func (d *Database) LinkProvider(userID uint, provider, providerID string) error {
+	var column string
+	switch provider {
+	case "google":
+		column = "google_id"
+	case "twitch":
+		column = "twitch_id"
+	case "kick":
+		column = "kick_id"
+	default:
+		return fmt.Errorf("unsupported provider for linking: %s", provider)
+	}
+
+	return d.conn.Model(&model.User{}).Where("id = ?", userID).Update(column, providerID).Error
 }
 
 func (d *Database) CreateUser(user *model.User) error {
@@ -85,11 +122,14 @@ func (d *Database) UpdateUserWallet(userID uint, ethAddress string, chainID int,
 	return d.conn.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
 }
 
-func (d *Database) UpdateUserProfile(userID uint, username, ethAddress string, mainWallet bool) error {
+func (d *Database) UpdateUserProfile(userID uint, username, description, backgroundURL, avatarURL, ethAddress string, mainWallet bool) error {
 	updates := map[string]interface{}{
-		"username":    username,
-		"eth_address": ethAddress,
-		"main_wallet": mainWallet,
+		"username":       username,
+		"description":    description,
+		"background_url": backgroundURL,
+		"avatar_url":     avatarURL,
+		"eth_address":    ethAddress,
+		"main_wallet":    mainWallet,
 	}
 	return d.conn.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
 }

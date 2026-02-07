@@ -20,4 +20,9 @@ type User struct {
 	WidgetMessageColor string    `json:"widget_message_color" gorm:"default:'#ffffff'"`
 	PreferredChainID   int       `json:"preferred_chain_id" gorm:"default:1"`
 	PreferredAsset     string    `json:"preferred_asset_address" gorm:"default:'0x0000000000000000000000000000000000000000'"`
+	Description        string    `json:"description"`
+	BackgroundURL      string    `json:"background_url"`
+	GoogleID           *string   `json:"google_id" gorm:"uniqueIndex"`
+	TwitchID           *string   `json:"twitch_id" gorm:"uniqueIndex"`
+	KickID             *string   `json:"kick_id" gorm:"uniqueIndex"`
 }

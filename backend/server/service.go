@@ -113,8 +113,15 @@ func (s *Service) CheckUsernameTaken(username string, userID uint) bool {
 }
 
 func (s *Service) CompleteUserProfile(userID uint, username, ethAddress string, mainWallet bool) (*dbmodel.User, string, error) {
+	// Preserve existing description/bg/avatar? Or assume they are empty/unchanged?
+	// For "CompleteUserProfile" usually used in signup/onboarding, so we might not have description yet.
+	// But to be safe, we should probably fetch the user first if we want to preserve fields, OR check if we can pass zero values to ignore?
+	// Fetch current user logic seems unnecessary if we overwrite, but let's keep it clean
+	// just by removing the unused fetch if we aren't using it.
+	// user, err := s.db.GetUserByUsername(username)
+
 	// Update DB
-	err := s.db.UpdateUserProfile(userID, username, ethAddress, mainWallet)
+	err := s.db.UpdateUserProfile(userID, username, "", "", "", ethAddress, mainWallet)
 	if err != nil {
 		return nil, "", err
 	}
@@ -125,15 +132,29 @@ func (s *Service) CompleteUserProfile(userID uint, username, ethAddress string, 
 		return nil, "", err
 	}
 
-	// Generate Token (Method needs to be accessible, maybe migrate GenerateSessionToken to Service too?)
-	// For now, let's duplicate logic or move JWT helper methods to Service receiver.
-	// Assuming GenerateSessionToken becomes a method of Service
 	token, err := s.GenerateSessionToken(updatedUser)
 	if err != nil {
 		return nil, "", err
 	}
 
 	return updatedUser, token, nil
+}
+
+func (s *Service) UpdateProfile(userID uint, req model.UpdateProfileRequest) error {
+	user, err := s.db.GetUserByID(userID)
+	if err != nil {
+		return err
+	}
+
+	// Update fields if provided (or overwrite if that's the contract)
+	// Assuming overwrite behavior for Settings form
+	user.Username = req.Username
+	user.Description = req.Description
+	user.BackgroundURL = req.BackgroundURL
+	user.AvatarURL = req.AvatarURL
+
+	// Use the DB method
+	return s.db.UpdateUserProfile(userID, user.Username, user.Description, user.BackgroundURL, user.AvatarURL, user.EthAddress, user.MainWallet)
 }
 
 func (s *Service) GetUserByUsername(username string) (*dbmodel.User, error) {

@@ -130,6 +130,7 @@ func (s *Server) Start(port string) {
 	r.GET("/api/me", s.HandleMe)
 	r.PUT("/api/me/wallet", s.HandleUpdateWallet)
 	r.PUT("/api/me/widget", s.HandleUpdateWidget)
+	r.PUT("/api/me/profile", s.HandleUpdateProfile)
 	r.POST("/api/me/widget/regenerate", s.HandleRegenerateWidget)
 	r.GET("/api/user/:username", s.HandleGetUser)
 	r.POST("/api/tip", s.HandleTip)
@@ -273,7 +274,35 @@ func (s *Server) HandleMe(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, user)
+	connectedProviders := []string{}
+	if user.GoogleID != nil || (user.Provider == "google" && user.ProviderID != "") {
+		connectedProviders = append(connectedProviders, "google")
+	}
+	if user.TwitchID != nil || (user.Provider == "twitch" && user.ProviderID != "") {
+		connectedProviders = append(connectedProviders, "twitch")
+	}
+	if user.KickID != nil || (user.Provider == "kick" && user.ProviderID != "") {
+		connectedProviders = append(connectedProviders, "kick")
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":                      user.ID,
+		"username":                user.Username,
+		"email":                   user.Email,
+		"avatar_url":              user.AvatarURL,
+		"preferred_chain_id":      user.PreferredChainID,
+		"preferred_asset_address": user.PreferredAsset,
+		"description":             user.Description,
+		"background_url":          user.BackgroundURL,
+		"provider":                user.Provider,
+		"connected_providers":     connectedProviders,
+		"eth_address":             user.EthAddress,
+		"widget_tts":              user.WidgetTTS,
+		"widget_bg_color":         user.WidgetBgColor,
+		"widget_user_color":       user.WidgetUserColor,
+		"widget_amount_color":     user.WidgetAmountColor,
+		"widget_message_color":    user.WidgetMessageColor,
+	})
 }
 
 func (s *Server) HandleGetUser(c *gin.Context) {
@@ -284,17 +313,27 @@ func (s *Server) HandleGetUser(c *gin.Context) {
 		return
 	}
 
+	connectedProviders := []string{}
+	if user.GoogleID != nil || (user.Provider == "google" && user.ProviderID != "") {
+		connectedProviders = append(connectedProviders, "google")
+	}
+	if user.TwitchID != nil || (user.Provider == "twitch" && user.ProviderID != "") {
+		connectedProviders = append(connectedProviders, "twitch")
+	}
+	if user.KickID != nil || (user.Provider == "kick" && user.ProviderID != "") {
+		connectedProviders = append(connectedProviders, "kick")
+	}
+
 	c.JSON(http.StatusOK, gin.H{
+		"id":                      user.ID,
 		"username":                user.Username,
-		"eth_address":             user.EthAddress,
-		"widget_tts":              user.WidgetTTS,
-		"widget_bg_color":         user.WidgetBgColor,
-		"widget_user_color":       user.WidgetUserColor,
-		"widget_amount_color":     user.WidgetAmountColor,
-		"widget_message_color":    user.WidgetMessageColor,
 		"avatar_url":              user.AvatarURL,
 		"preferred_chain_id":      user.PreferredChainID,
 		"preferred_asset_address": user.PreferredAsset,
+		"description":             user.Description,
+		"background_url":          user.BackgroundURL,
+		"provider":                user.Provider,
+		"connected_providers":     connectedProviders,
 	})
 }
 
@@ -363,6 +402,51 @@ func (s *Server) HandleUpdateWidget(c *gin.Context) {
 
 	s.logger.Printf("User %s updated widget config", claims.Username)
 	c.JSON(http.StatusOK, gin.H{"message": "Widget settings updated"})
+}
+
+func (s *Server) HandleUpdateProfile(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid token"})
+		return
+	}
+	tokenString := authHeader[7:]
+
+	claims, err := s.service.ValidateSessionToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	var req model.UpdateProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
+
+	// Basic Validation
+	if len(req.Username) < 3 || len(req.Username) > 20 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Username must be 3-20 characters"})
+		return
+	}
+
+	// Check if username is taken (if changed)
+	// Service.UpdateProfile fetches user first so we could check there?
+	// But let's check here to return 409
+	if s.service.CheckUsernameTaken(req.Username, claims.UserID) {
+		c.JSON(http.StatusConflict, gin.H{"error": "Username already taken"})
+		return
+	}
+
+	err = s.service.UpdateProfile(claims.UserID, req)
+	if err != nil {
+		s.logger.Printf("Failed to update profile: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
+		return
+	}
+
+	s.logger.Printf("User %s updated profile", claims.Username)
+	c.JSON(http.StatusOK, gin.H{"message": "Profile updated"})
 }
 
 func (s *Server) HandleRegenerateWidget(c *gin.Context) {

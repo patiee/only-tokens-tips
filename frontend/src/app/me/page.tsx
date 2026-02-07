@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Wallet, User as UserIcon, Copy, Check, DollarSign, TrendingUp, ExternalLink } from "lucide-react";
+import { Wallet, User as UserIcon, Copy, Check, DollarSign, TrendingUp, ExternalLink, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 export type UserProfile = {
@@ -162,9 +162,7 @@ function DashboardContent() {
                         <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-white to-zinc-500">
                             Hello, {profile.name || profile.username}
                         </h1>
-                        <p className="text-zinc-400 mt-1 flex items-center justify-center sm:justify-start gap-2">
-                            <UserIcon size={16} /> @{profile.username}
-                        </p>
+
                     </div>
 
                     <div className="flex gap-3">
@@ -250,10 +248,18 @@ function DashboardContent() {
                     {/* Right Col: Recent Activity (Placeholder) */}
                     <div className="lg:col-span-2">
                         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 h-full min-h-[400px]">
-                            <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-                                <DollarSign className="text-green-400" /> Recent Tips
-                                {tips.length > 0 && <span className="text-xs font-normal text-zinc-500 bg-zinc-800 px-2 py-1 rounded-full">{tips.length}</span>}
-                            </h3>
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-lg font-bold flex items-center gap-2">
+                                    <DollarSign className="text-green-400" /> Recent Tips
+                                    {tips.length > 0 && <span className="text-xs font-normal text-zinc-500 bg-zinc-800 px-2 py-1 rounded-full">{tips.length}</span>}
+                                </h3>
+                                <Link
+                                    href="/me/tips"
+                                    className="text-xs font-semibold text-zinc-400 hover:text-white flex items-center gap-1 transition-colors bg-zinc-800/50 hover:bg-zinc-800 px-3 py-1.5 rounded-full"
+                                >
+                                    All Tips <ChevronRight size={14} />
+                                </Link>
+                            </div>
 
                             {tips.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-64 text-zinc-500 gap-4 border-2 border-dashed border-zinc-800 rounded-xl bg-zinc-900/50">

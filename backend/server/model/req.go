@@ -36,3 +36,10 @@ type UpdateWalletRequest struct {
 	PreferredChainID      int    `json:"preferred_chain_id"`
 	PreferredAssetAddress string `json:"preferred_asset_address"`
 }
+
+type UpdateProfileRequest struct {
+	Username      string `json:"username"`
+	Description   string `json:"description"`
+	BackgroundURL string `json:"background_url"`
+	AvatarURL     string `json:"avatar_url"`
+}
