@@ -65,8 +65,8 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
     const [loading, setLoading] = useState(false);
 
     // Selection State
-    // Default to Bitcoin (100001) as per user request (Sender's choice, not recipient's preference)
-    const [selectedChainId, setSelectedChainId] = useState<number>(100001);
+    // Default to Ethereum (1)
+    const [selectedChainId, setSelectedChainId] = useState<number>(1);
     const [selectedAsset, setSelectedAsset] = useState<Token | null>(null);
 
     // Modal State
@@ -298,23 +298,36 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
 
             {/* Message Input */}
             <div className="space-y-2">
-                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Message</label>
+                <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Message</label>
+                    <span className="text-xs text-zinc-600">{message.length}/500</span>
+                </div>
                 <textarea
                     placeholder="Write your tip message here..."
                     value={message}
-                    onChange={(e) => setMessage(e.target.value)}
+                    maxLength={500}
+                    onChange={(e) => {
+                        if (e.target.value.length <= 500) setMessage(e.target.value);
+                    }}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all placeholder:text-zinc-700 resize-none h-24 text-sm"
                 />
             </div>
 
             {/* Name Input */}
             <div className="space-y-2">
-                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Name</label>
+                <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Name</label>
+                    <span className="text-xs text-zinc-600">{senderName.length}/20</span>
+                </div>
                 <input
                     type="text"
                     placeholder="Your Name (optional)"
                     value={senderName}
-                    onChange={(e) => setSenderName(e.target.value)}
+                    maxLength={20}
+                    onChange={(e) => {
+                        const val = e.target.value.replace(/\./g, ""); // Remove periods
+                        if (val.length <= 20) setSenderName(val);
+                    }}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all placeholder:text-zinc-700 text-sm"
                 />
             </div>
@@ -324,14 +337,11 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
                 <div className={`w-full transition-all ${isConnected && currentAddress ? "flex items-center justify-between px-4 py-3 bg-zinc-950/80 rounded-xl border border-zinc-800/50 backdrop-blur-sm shadow-sm hover:border-zinc-700" : ""}`}>
                     {isConnected && currentAddress ? (
                         <>
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20">
-                                    <Wallet size={16} className="text-green-500" />
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Connected</span>
-                                    <span className="text-sm font-medium text-zinc-300 font-mono">
-                                        {currentAddress.slice(0, 6)}...{currentAddress.slice(-4)}
+                            <div className="flex items-center gap-3 w-full overflow-hidden">
+                                <div className="flex flex-col w-full">
+                                    <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-0.5">Connected</span>
+                                    <span className="text-sm font-medium text-zinc-300 font-mono truncate w-full">
+                                        {currentAddress}
                                     </span>
                                 </div>
                             </div>
@@ -360,14 +370,14 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
                         <button
                             onClick={handleTip}
                             disabled={loading || !amount || parseFloat(amount) <= 0}
-                            className="w-full p-4 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold text-lg shadow-lg shadow-purple-900/20 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            className="w-full py-4 rounded-xl bg-white text-black font-black text-xl hover:bg-zinc-200 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-[0_0_20px_-5px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_-5px_rgba(255,255,255,0.5)]"
                         >
                             {loading ? (
                                 <>
                                     <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
                                     Processing...
                                 </>
-                            ) : "Bridge & Tip"}
+                            ) : "Send"}
                         </button>
                         {error && (
                             <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 text-red-400 text-xs animate-in fade-in slide-in-from-top-1">

@@ -98,7 +98,7 @@ export default function TipPage() {
             {/* Header / Nav */}
             <div className="fixed top-0 left-0 right-0 z-50 bg-black/50 backdrop-blur-xl border-b border-white/5 transition-all duration-300">
                 <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
-                    <Link href="/" className="font-black text-xl tracking-tighter bg-clip-text text-transparent bg-gradient-to-tr from-white to-zinc-400 hover:opacity-80 transition-opacity flex items-center gap-2">
+                    <Link href="/" className="font-black text-5xl tracking-tighter bg-clip-text text-transparent bg-gradient-to-tr from-white to-zinc-400 hover:opacity-80 transition-opacity flex items-center gap-2">
                         Stream Tips
                     </Link>
                     <div className="font-bold text-sm tracking-wider uppercase text-zinc-500">
@@ -179,8 +179,7 @@ export default function TipPage() {
                         <div className="w-full h-px bg-white/5 mb-8" />
 
                         <div className="space-y-2 mb-4">
-                            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                                <span className="w-1 h-4 bg-purple-500 rounded-full" />
+                            <h2 className="text-lg font-bold text-white">
                                 Send a Tip
                             </h2>
                             <p className="text-sm text-zinc-500">
