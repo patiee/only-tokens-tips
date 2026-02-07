@@ -113,36 +113,59 @@ export default function TipPage() {
                 </div>
             </div>
 
-            {/* Hero / Banner */}
-            <div className="relative h-64 md:h-80 w-full overflow-hidden">
+            {/* Global Background */}
+            <div className="fixed inset-0 pointer-events-none z-0">
                 {user.background_url ? (
-                    <img src={user.background_url} alt="Banner" className="w-full h-full object-cover opacity-80" />
+                    <>
+                        <div
+                            className="absolute inset-0 bg-cover bg-center transition-opacity duration-700 opacity-40 blur-3xl scale-110"
+                            style={{ backgroundImage: `url(${user.background_url})` }}
+                        />
+                        <div className="absolute inset-0 bg-black/60" />
+                        <div className="absolute inset-0 bg-gradient-to-br from-purple-900/10 via-black/80 to-blue-900/10" />
+                    </>
                 ) : (
-                    <div className="w-full h-full bg-gradient-to-b from-purple-900/40 via-black to-black relative">
-                        {/* Generative Pattern Fallback */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-black to-blue-900/10" />
+                )}
+            </div>
+
+            {/* Hero / Banner */}
+            <div className="relative h-96 md:h-[500px] w-full overflow-hidden z-0 mt-24">
+                {user.background_url ? (
+                    <div
+                        className="w-full h-full bg-cover bg-center opacity-80"
+                        style={{
+                            backgroundImage: `url(${user.background_url})`,
+                            maskImage: 'linear-gradient(to bottom, black 0%, transparent 80%)',
+                            WebkitMaskImage: 'linear-gradient(to bottom, black 0%, transparent 80%)'
+                        }}
+                    />
+                ) : (
+                    <div className="w-full h-full bg-gradient-to-b from-purple-900/20 via-black to-black relative">
                         <div className="absolute inset-0 opacity-30" style={{
                             backgroundImage: "radial-gradient(circle at center, #6366f1 1px, transparent 1px)",
                             backgroundSize: "24px 24px"
                         }} />
                     </div>
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent" />
+                {/* Subtle top shadow for header contrast, transparent bottom */}
+                <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-transparent pointer-events-none" />
             </div>
 
-            <div className="max-w-4xl mx-auto px-4 relative -mt-24 z-10 pb-20">
+            <div className="max-w-4xl mx-auto px-4 relative z-10 -mt-80 pb-20">
                 <div className="flex flex-col md:flex-row items-start gap-8">
                     {/* Simplified Content - Left Column (Profile) */}
                     <div className="flex-1 w-full relative group">
-                        {/* Gradient Glow Effect */}
-                        <div className="absolute -inset-0.5 bg-gradient-to-br from-purple-600/20 via-blue-600/20 to-purple-600/20 rounded-[2rem] opacity-75 blur-xl group-hover:opacity-100 transition duration-1000"></div>
 
-                        {/* Main Card */}
-                        <div className="relative w-full bg-black/60 backdrop-blur-2xl border border-white/10 rounded-[1.8rem] p-8 shadow-2xl animate-in slide-in-from-bottom-8 duration-700">
+                        {/* Main Card (Matches Dashboard Style) */}
+                        <div className="relative w-full bg-zinc-900/40 backdrop-blur-xl border border-white/5 rounded-3xl p-8 shadow-2xl animate-in slide-in-from-bottom-8 duration-700 hover:border-white/10 transition-all">
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 blur-[80px] rounded-full pointer-events-none" />
 
-                            <div className="flex flex-col items-center md:items-start gap-6 mb-8 text-center md:text-left">
-                                <div className="relative">
-                                    <div className="w-32 h-32 rounded-full p-[3px] bg-gradient-to-br from-purple-500 via-blue-500 to-purple-600 shadow-2xl shadow-purple-500/30">
-                                        <div className="w-full h-full rounded-full overflow-hidden bg-black border-4 border-black">
+                            <div className="flex flex-col items-center md:items-start gap-6 mb-8 text-center md:text-left relative z-10">
+                                <div className="relative group">
+                                    <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 blur opacity-40 group-hover:opacity-75 transition duration-500"></div>
+                                    <div className="relative w-32 h-32 bg-zinc-900/80 backdrop-blur-sm rounded-full flex items-center justify-center text-4xl font-bold overflow-hidden border-4 border-black/50 shadow-2xl">
+                                        <div className="w-full h-full rounded-full overflow-hidden">
                                             <img
                                                 src={user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`}
                                                 alt={user.username}
@@ -150,7 +173,6 @@ export default function TipPage() {
                                             />
                                         </div>
                                     </div>
-
                                 </div>
 
                                 <div className="space-y-2">
