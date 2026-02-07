@@ -151,14 +151,17 @@ function DashboardContent() {
     );
 
     return (
-        <div className="min-h-screen bg-black text-white p-4 sm:p-8">
-            <div className="max-w-6xl mx-auto space-y-8">
+        <div className="min-h-screen bg-black text-white selection:bg-purple-500/30 relative">
+            {/* Global Gradient Background */}
+            <div className="fixed inset-0 bg-gradient-to-br from-purple-900/20 via-black to-blue-900/10 pointer-events-none" />
+
+            <div className="max-w-6xl mx-auto p-4 sm:p-8 space-y-8 relative z-10">
 
                 {/* Header */}
-                <header className="flex flex-col sm:flex-row items-center gap-6 border-b border-zinc-800 pb-8">
-                    <div className="relative">
-                        <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 blur opacity-75"></div>
-                        <div className="relative w-24 h-24 bg-zinc-900 rounded-full flex items-center justify-center text-4xl font-bold overflow-hidden border-4 border-black">
+                <header className="flex flex-col sm:flex-row items-center gap-8 py-8 border-b border-white/5">
+                    <div className="relative group">
+                        <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 blur opacity-40 group-hover:opacity-75 transition duration-500"></div>
+                        <div className="relative w-28 h-28 bg-zinc-900/80 backdrop-blur-sm rounded-full flex items-center justify-center text-4xl font-bold overflow-hidden border-4 border-black/50 shadow-2xl">
                             {profile.avatar_url ? (
                                 <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
                             ) : (
@@ -167,163 +170,182 @@ function DashboardContent() {
                         </div>
                     </div>
 
-                    <div className="text-center sm:text-left flex-1">
-                        <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-white to-zinc-500">
+                    <div className="text-center sm:text-left flex-1 space-y-2">
+                        <h1 className="text-5xl sm:text-6xl font-black bg-clip-text text-transparent bg-gradient-to-br from-white via-white to-zinc-500 tracking-tight">
                             Hello, {profile.name || profile.username}
                         </h1>
-
+                        <p className="text-zinc-400 font-medium text-lg">
+                            Welcome back to your creator dashboard.
+                        </p>
                     </div>
                 </header>
 
                 {/* Main Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                     {/* Left Col: Setup & Wallet */}
-                    <div className="space-y-8">
+                    <div className="space-y-6">
 
                         {/* Public Page Card */}
-                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-[50px] rounded-full pointer-events-none group-hover:bg-blue-500/20 transition-all" />
-                            <div className="flex justify-between items-start mb-4">
-                                <h3 className="text-lg font-bold flex items-center gap-2">
-                                    <ExternalLink className="text-blue-400" /> Public Page
+                        <div className="bg-zinc-900/40 backdrop-blur-xl border border-white/5 rounded-3xl p-6 relative overflow-hidden group hover:border-white/10 transition-all duration-500">
+                            <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/10 blur-[60px] rounded-full pointer-events-none group-hover:bg-blue-500/20 transition-all duration-500" />
+                            <div className="flex justify-between items-start mb-6 relative">
+                                <h3 className="text-xl font-bold flex items-center gap-3 text-white">
+                                    <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400">
+                                        <ExternalLink size={20} />
+                                    </div>
+                                    Public Page
                                 </h3>
                                 <Link
                                     href={`/${profile.username}`}
                                     target="_blank"
-                                    className="text-xs font-semibold text-blue-400 hover:text-blue-300 bg-blue-900/20 hover:bg-blue-900/30 px-3 py-1.5 rounded-full transition-colors"
+                                    className="text-xs font-bold text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 px-4 py-2 rounded-full transition-all border border-blue-500/10 hover:border-blue-500/30"
                                 >
-                                    View
+                                    View Live
                                 </Link>
                             </div>
-                            <p className="text-zinc-400 text-sm mb-4">
-                                Share this link with your viewers to receive tips.
+                            <p className="text-zinc-400 text-sm mb-6 font-medium leading-relaxed max-w-[90%]">
+                                Share this unique link with your viewers to start receiving tips directly.
                             </p>
 
-                            <div className="flex gap-2">
-                                <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-xs text-zinc-500 font-mono truncate flex-1">
+                            <div className="flex gap-2 relative">
+                                <div className="bg-black/40 border border-white/5 rounded-xl p-4 text-xs text-zinc-400 font-mono truncate flex-1 shadow-inner">
                                     {typeof window !== 'undefined' ? `${window.location.origin}/${profile.username}` : `.../${profile.username}`}
                                 </div>
                                 <button
                                     onClick={copyLinkToClipboard}
-                                    className={`p-3 rounded-lg border transition-all ${copiedLink ? "bg-green-500/10 border-green-500/20 text-green-400" : "bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-white"}`}
+                                    className={`p-3.5 rounded-xl border transition-all duration-300 shadow-lg ${copiedLink ? "bg-green-500/10 border-green-500/30 text-green-400" : "bg-white/5 border-white/5 hover:bg-white/10 text-white"}`}
                                 >
-                                    {copiedLink ? <Check size={18} /> : <Copy size={18} />}
+                                    {copiedLink ? <Check size={18} strokeWidth={3} /> : <Copy size={18} />}
                                 </button>
                             </div>
                         </div>
 
                         {/* Widget Card */}
-                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 blur-[50px] rounded-full pointer-events-none group-hover:bg-purple-500/20 transition-all" />
-                            <div className="flex justify-between items-start mb-4">
-                                <h3 className="text-lg font-bold flex items-center gap-2">
-                                    <TrendingUp className="text-purple-400" /> Overlay Widget
+                        <div className="bg-zinc-900/40 backdrop-blur-xl border border-white/5 rounded-3xl p-6 relative overflow-hidden group hover:border-white/10 transition-all duration-500">
+                            <div className="absolute top-0 right-0 w-40 h-40 bg-purple-500/10 blur-[60px] rounded-full pointer-events-none group-hover:bg-purple-500/20 transition-all duration-500" />
+                            <div className="flex justify-between items-start mb-6 relative">
+                                <h3 className="text-xl font-bold flex items-center gap-3 text-white">
+                                    <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
+                                        <TrendingUp size={20} />
+                                    </div>
+                                    Overlay Widget
                                 </h3>
                                 <Link
                                     href="/me/widget"
-                                    className="text-xs font-semibold text-purple-400 hover:text-purple-300 bg-purple-900/20 hover:bg-purple-900/30 px-3 py-1.5 rounded-full transition-colors"
+                                    className="text-xs font-bold text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 px-4 py-2 rounded-full transition-all border border-purple-500/10 hover:border-purple-500/30"
                                 >
-                                    Edit
+                                    Configure
                                 </Link>
                             </div>
-                            <p className="text-zinc-400 text-sm mb-4">
-                                Add this URL as a Browser Source in OBS to show tips on stream.
+                            <p className="text-zinc-400 text-sm mb-6 font-medium leading-relaxed max-w-[90%]">
+                                Add this URL as a Browser Source in OBS to display real-time tip alerts.
                             </p>
 
-                            <div className="flex gap-2">
-                                <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-xs text-zinc-500 font-mono truncate flex-1">
+                            <div className="flex gap-2 relative">
+                                <div className="bg-black/40 border border-white/5 rounded-xl p-4 text-xs text-zinc-400 font-mono truncate flex-1 shadow-inner">
                                     {typeof window !== 'undefined' ? `${window.location.origin}/widget/${profile.widget_token || profile.username}` : `.../widget/${profile.widget_token || profile.username}`}
                                 </div>
                                 <button
                                     onClick={copyToClipboard}
-                                    className={`p-3 rounded-lg border transition-all ${copied ? "bg-green-500/10 border-green-500/20 text-green-400" : "bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-white"}`}
+                                    className={`p-3.5 rounded-xl border transition-all duration-300 shadow-lg ${copied ? "bg-green-500/10 border-green-500/30 text-green-400" : "bg-white/5 border-white/5 hover:bg-white/10 text-white"}`}
                                 >
-                                    {copied ? <Check size={18} /> : <Copy size={18} />}
+                                    {copied ? <Check size={18} strokeWidth={3} /> : <Copy size={18} />}
                                 </button>
                             </div>
                         </div>
 
-                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-                            <div className="flex justify-between items-start mb-4">
-                                <h3 className="text-lg font-bold flex items-center gap-2">
-                                    <Wallet className="text-blue-400" /> Wallet
+                        {/* Wallet Card */}
+                        <div className="bg-zinc-900/40 backdrop-blur-xl border border-white/5 rounded-3xl p-6 relative overflow-hidden">
+                            <div className="flex justify-between items-start mb-6">
+                                <h3 className="text-xl font-bold flex items-center gap-3 text-white">
+                                    <div className="p-2 rounded-xl bg-zinc-800 text-zinc-400">
+                                        <Wallet size={20} />
+                                    </div>
+                                    Wallet
                                 </h3>
                                 <Link
                                     href="/me/wallet"
-                                    className="text-xs font-semibold text-blue-400 hover:text-blue-300 bg-blue-900/20 hover:bg-blue-900/30 px-3 py-1.5 rounded-full transition-colors"
+                                    className="text-xs font-bold text-zinc-300 bg-white/5 hover:bg-white/10 px-4 py-2 rounded-full transition-all border border-white/5"
                                 >
-                                    Edit
+                                    Manage
                                 </Link>
                             </div>
-                            <div className="bg-zinc-950 rounded-xl p-4 border border-zinc-800 flex items-center justify-between group cursor-pointer hover:border-zinc-700 transition-colors">
-                                <div className="font-mono text-sm text-zinc-300 truncate pr-4">
+                            <div className="bg-black/40 rounded-xl p-4 border border-white/5 flex items-center justify-between group transition-colors shadow-inner">
+                                <div className="font-mono text-sm text-zinc-300 truncate tracking-tight">
                                     {profile.wallet_address}
                                 </div>
-
                             </div>
                         </div>
                     </div>
 
-                    {/* Right Col: Recent Activity (Placeholder) */}
+                    {/* Right Col: Recent Activity */}
                     <div className="lg:col-span-2">
-                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 h-full min-h-[400px] flex flex-col">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-lg font-bold flex items-center gap-2">
-                                    <DollarSign className="text-green-400" /> Recent Tips
-                                    {tips.length > 0 && <span className="text-xs font-normal text-zinc-500 bg-zinc-800 px-2 py-1 rounded-full">{tips.length}</span>}
+                        <div className="bg-zinc-900/40 backdrop-blur-xl border border-white/5 rounded-3xl p-8 h-full min-h-[500px] flex flex-col relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-green-500/5 blur-[100px] rounded-full pointer-events-none" />
+
+                            <div className="flex justify-between items-center mb-8 relative">
+                                <h3 className="text-2xl font-bold flex items-center gap-3 text-white">
+                                    <div className="p-2 rounded-xl bg-green-500/10 text-green-400">
+                                        <DollarSign size={24} />
+                                    </div>
+                                    Recent Tips
+                                    {tips.length > 0 && <span className="ml-2 text-xs font-bold text-green-400 bg-green-500/10 px-2 py-1 rounded-lg border border-green-500/20">{tips.length}</span>}
                                 </h3>
                                 <Link
                                     href="/me/tips"
-                                    className="text-xs font-semibold text-zinc-400 hover:text-white flex items-center gap-1 transition-colors bg-zinc-800/50 hover:bg-zinc-800 px-3 py-1.5 rounded-full"
+                                    className="text-xs font-bold text-zinc-400 hover:text-white flex items-center gap-1 transition-colors bg-white/5 hover:bg-white/10 px-4 py-2 rounded-full border border-white/5"
                                 >
-                                    All Tips <ChevronRight size={14} />
+                                    View All <ChevronRight size={14} strokeWidth={3} />
                                 </Link>
                             </div>
 
                             {tips.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center flex-1 w-full text-zinc-500 gap-4 border-2 border-dashed border-zinc-800 rounded-xl bg-zinc-900/50 h-full min-h-[300px]">
-                                    <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center">
-                                        <DollarSign size={24} className="text-zinc-600" />
+                                <div className="flex flex-col items-center justify-center flex-1 w-full text-zinc-500 gap-6 border-2 border-dashed border-white/5 rounded-2xl bg-black/20 h-full min-h-[300px]">
+                                    <div className="w-20 h-20 rounded-full bg-zinc-900/50 flex items-center justify-center shadow-2xl border border-white/5">
+                                        <DollarSign size={32} className="text-zinc-600" />
                                     </div>
-                                    <p>No tips yet. Share your link to get started!</p>
+                                    <div className="text-center space-y-2">
+                                        <p className="text-zinc-300 font-medium text-lg">No tips received yet</p>
+                                        <p className="text-zinc-500 text-sm">Share your public link to start earning!</p>
+                                    </div>
                                 </div>
                             ) : (
-                                <div className="overflow-x-auto">
+                                <div className="overflow-x-auto -mx-4 sm:mx-0">
                                     <table className="w-full text-left border-collapse">
                                         <thead>
-                                            <tr className="border-b border-zinc-800 text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                                                <th className="py-3 px-4">Date</th>
-                                                <th className="py-3 px-4">Sender</th>
-                                                <th className="py-3 px-4">Amount</th>
-                                                <th className="py-3 px-4">Message</th>
-                                                <th className="py-3 px-4">Tx Hash</th>
+                                            <tr className="border-b border-white/5 text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                                                <th className="py-4 px-4 font-black">Date</th>
+                                                <th className="py-4 px-4 font-black">Sender</th>
+                                                <th className="py-4 px-4 font-black">Amount</th>
+                                                <th className="py-4 px-4 font-black">Message</th>
+                                                <th className="py-4 px-4 font-black">Tx Hash</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="text-sm divide-y divide-zinc-800/50">
+                                        <tbody className="text-sm divide-y divide-white/5">
                                             {tips.map((tip, i) => (
-                                                <tr key={i} className="hover:bg-zinc-800/30 transition-colors">
-                                                    <td className="py-3 px-4 text-zinc-400">
-                                                        {new Date(tip.created_at).toLocaleDateString()} {new Date(tip.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                <tr key={i} className="hover:bg-white/5 transition-colors group">
+                                                    <td className="py-4 px-4 text-zinc-500 font-medium whitespace-nowrap">
+                                                        {new Date(tip.created_at).toLocaleDateString()} <span className="text-zinc-600 mx-1">•</span> {new Date(tip.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                     </td>
-                                                    <td className="py-3 px-4 font-medium text-white">{tip.sender}</td>
-                                                    <td className="py-3 px-4 text-green-400 font-mono">
-                                                        {tip.amount} {tip.asset || "ETH"}
+                                                    <td className="py-4 px-4 font-bold text-white group-hover:text-purple-300 transition-colors">{tip.sender}</td>
+                                                    <td className="py-4 px-4 text-green-400 font-black font-mono tracking-tight bg-green-500/5 rounded-lg">
+                                                        {tip.amount} <span className="text-green-500/70 text-xs ml-0.5">{tip.asset || "ETH"}</span>
                                                     </td>
-                                                    <td className="py-3 px-4 text-zinc-300 break-words whitespace-normal min-w-[200px]">
-                                                        {tip.message}
+                                                    <td className="py-4 px-4 text-zinc-300 break-words whitespace-normal min-w-[200px] italic">
+                                                        "{tip.message}"
                                                     </td>
-                                                    <td className="py-3 px-4">
+                                                    <td className="py-4 px-4">
                                                         {tip.tx_hash ? (
                                                             <a
                                                                 href={`https://basescan.org/tx/${tip.tx_hash}`}
                                                                 target="_blank"
                                                                 rel="noreferrer"
-                                                                className="text-purple-400 hover:text-purple-300 text-xs bg-purple-500/10 px-2 py-1 rounded border border-purple-500/20"
+                                                                className="text-purple-400 hover:text-purple-300 text-[10px] font-bold bg-purple-500/10 hover:bg-purple-500/20 px-3 py-1.5 rounded-lg border border-purple-500/20 transition-all inline-flex items-center gap-1 uppercase tracking-wider"
                                                             >
-                                                                View
+                                                                Verify <ExternalLink size={10} />
                                                             </a>
-                                                        ) : <span className="text-zinc-600">-</span>}
+                                                        ) : <span className="text-zinc-700">-</span>}
                                                     </td>
                                                 </tr>
                                             ))}
