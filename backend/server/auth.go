@@ -17,8 +17,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-func (s *Service) HandleOAuthLogin(c *gin.Context) {
-	provider := c.Param("provider")
+func (s *Service) HandleOAuthLogin(c *gin.Context, provider string) {
 	var config *oauth2.Config
 
 	switch provider {
@@ -128,8 +127,7 @@ func (s *Service) ValidateLinkState(state string) (uint, error) {
 	return userID, nil
 }
 
-func (s *Service) HandleOAuthCallback(c *gin.Context) {
-	provider := c.Param("provider")
+func (s *Service) HandleOAuthCallback(c *gin.Context, provider string) {
 	state := c.Query("state")
 	code := c.Query("code")
 

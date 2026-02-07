@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -31,17 +30,10 @@ var (
 // ... (Config struct)
 
 func (s *Server) InitMinIO() {
-	endpoint := "minio:9000"        // Service name in docker-compose
-	accessKeyID := "minioadmin"     // Default or from env
-	secretAccessKey := "minioadmin" // Default or from env
-	useSSL := false
-
-	if user := os.Getenv("MINIO_ROOT_USER"); user != "" {
-		accessKeyID = user
-	}
-	if pass := os.Getenv("MINIO_ROOT_PASSWORD"); pass != "" {
-		secretAccessKey = pass
-	}
+	endpoint := s.config.MinIOEndpoint
+	accessKeyID := s.config.MinIOAccessKeyID
+	secretAccessKey := s.config.MinIOSecretKey
+	useSSL := s.config.MinIOUseSSL
 
 	var err error
 	minioClient, err = minio.New(endpoint, &minio.Options{
@@ -91,12 +83,75 @@ func (s *Server) Start(port string) {
 	s.InitMinIO()
 
 	r := gin.Default()
-	// ... (CORS logic)
 
-	// ... (Routes)
-	r.POST("/api/upload", s.HandleUpload)
+	// CORS
+	if s.config.CORSEnabled {
+		r.Use(func(c *gin.Context) {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+			c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+			c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
 
-	// ... (Rest of Start)
+			if c.Request.Method == "OPTIONS" {
+				c.AbortWithStatus(204)
+				return
+			}
+
+			c.Next()
+		})
+	}
+
+	// Auth Routes
+	r.GET("/auth/google/login", func(c *gin.Context) { s.service.HandleOAuthLogin(c, "google") })
+	r.GET("/auth/google/callback", func(c *gin.Context) { s.service.HandleOAuthCallback(c, "google") })
+	r.GET("/auth/twitch/login", func(c *gin.Context) { s.service.HandleOAuthLogin(c, "twitch") })
+	r.GET("/auth/twitch/callback", func(c *gin.Context) { s.service.HandleOAuthCallback(c, "twitch") })
+	r.GET("/auth/kick/login", func(c *gin.Context) { s.service.HandleOAuthLogin(c, "kick") })
+	r.GET("/auth/kick/callback", func(c *gin.Context) { s.service.HandleOAuthCallback(c, "kick") })
+
+	// Link Routes
+	r.GET("/auth/google/link", func(c *gin.Context) { s.service.HandleOAuthLogin(c, "google") })
+	r.GET("/auth/twitch/link", func(c *gin.Context) { s.service.HandleOAuthLogin(c, "twitch") })
+	r.GET("/auth/kick/link", func(c *gin.Context) { s.service.HandleOAuthLogin(c, "kick") })
+
+	// API Routes
+	api := r.Group("/api")
+	{
+		api.POST("/auth/signup", s.HandleSignup)
+		api.POST("/auth/login", s.HandleLogin)
+		api.POST("/auth/wallet/login", func(c *gin.Context) { s.service.HandleWalletLogin(c) })
+
+		api.GET("/me", s.HandleMe)
+		api.PUT("/me/profile", s.HandleUpdateProfile)
+		api.GET("/me/tips", s.HandleGetTips)
+
+		api.GET("/user/:username", s.HandleGetUser)
+
+		api.PUT("/wallet", s.HandleUpdateWallet)
+
+		api.PUT("/widget", s.HandleUpdateWidget)
+		api.POST("/widget/regenerate", s.HandleRegenerateWidget)
+		api.GET("/widget/:token/config", s.HandleGetWidgetConfig)
+
+		api.POST("/tips", s.HandleTip)
+
+		api.POST("/upload", s.HandleUpload)
+	}
+
+	// WS
+	r.GET("/ws/:streamerId", s.HandleWS)
+
+	if s.config.CertFile != "" && s.config.KeyFile != "" {
+		s.logger.Printf("Starting server on port %s (HTTPS)", port)
+		if err := r.RunTLS(":"+port, s.config.CertFile, s.config.KeyFile); err != nil {
+			s.logger.Fatalf("Failed to run server: %v", err)
+		}
+	} else {
+		s.logger.Printf("Starting server on port %s (HTTP)", port)
+		if err := r.Run(":" + port); err != nil {
+			s.logger.Fatalf("Failed to run server: %v", err)
+		}
+	}
 }
 
 // ... (Existing Handlers)
@@ -167,6 +222,10 @@ type Config struct {
 	CertFile           string
 	KeyFile            string
 	CORSEnabled        bool
+	MinIOEndpoint      string
+	MinIOAccessKeyID   string
+	MinIOSecretKey     string
+	MinIOUseSSL        bool
 }
 
 type Server struct {

@@ -52,6 +52,10 @@ func main() {
 		CertFile:           os.Getenv("CERT_FILE"),
 		KeyFile:            os.Getenv("KEY_FILE"),
 		CORSEnabled:        os.Getenv("CORS_ENABLED") == "true",
+		MinIOEndpoint:      os.Getenv("MINIO_ENDPOINT"),
+		MinIOAccessKeyID:   os.Getenv("MINIO_ACCESS_KEY"),
+		MinIOSecretKey:     os.Getenv("MINIO_SECRET_KEY"),
+		MinIOUseSSL:        os.Getenv("MINIO_USE_SSL") == "true",
 	}
 
 	// Init and Start Server
