@@ -157,40 +157,40 @@ export function WalletNetworkSelector({
         <div className="space-y-4 text-left">
             {/* Chain Selector */}
             <div className="space-y-2 relative">
-                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">Network</label>
+                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Network</label>
                 <div className="relative">
                     <button
                         type="button"
                         onClick={() => setChainDropdownOpen(!chainDropdownOpen)}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none flex items-center justify-between transition-all hover:border-zinc-700"
+                        className="w-full bg-zinc-900/30 border border-white/5 rounded-2xl px-5 py-4 text-white focus:outline-none focus:bg-zinc-900/50 flex items-center justify-between transition-all hover:border-white/10 hover:bg-zinc-900/50"
                     >
-                        <div className="flex items-center gap-2">
-                            {selectedChain?.logoURI ? <img src={selectedChain.logoURI} alt={selectedChain.name} className="w-5 h-5 rounded-full" /> : <div className="w-5 h-5 rounded-full bg-zinc-800" />}
-                            <span>{selectedChain?.name || "Select Chain"}</span>
+                        <div className="flex items-center gap-3">
+                            {selectedChain?.logoURI ? <img src={selectedChain.logoURI} alt={selectedChain.name} className="w-6 h-6 rounded-full" /> : <div className="w-6 h-6 rounded-full bg-zinc-800" />}
+                            <span className="font-bold text-sm tracking-tight">{selectedChain?.name || "Select Chain"}</span>
                         </div>
-                        <ChevronDown size={16} className={`text-zinc-500 transition-transform ${chainDropdownOpen ? "rotate-180" : ""}`} />
+                        <ChevronDown size={18} className={`text-zinc-500 transition-transform duration-300 ${chainDropdownOpen ? "rotate-180" : ""}`} />
                     </button>
 
                     {chainDropdownOpen && (
-                        <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl z-30 max-h-60 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2">
-                            <div className="p-2 border-b border-zinc-800 sticky top-0 bg-zinc-900 z-10">
+                        <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-950/95 border border-white/10 rounded-2xl shadow-2xl z-30 max-h-80 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 backdrop-blur-3xl">
+                            <div className="p-3 border-b border-white/5 sticky top-0 bg-zinc-950/90 z-10 backdrop-blur-md">
                                 <div className="relative">
-                                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                                    <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" />
                                     <input
                                         type="text"
                                         placeholder="Search network..."
                                         value={chainSearch}
                                         onChange={(e) => setChainSearch(e.target.value)}
                                         onClick={(e) => e.stopPropagation()}
-                                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                        className="w-full bg-zinc-900/50 border border-white/5 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder:text-zinc-600 font-medium"
                                         autoFocus
                                     />
                                 </div>
                             </div>
-                            <div className="overflow-y-auto max-h-48">
+                            <div className="overflow-y-auto max-h-64 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent p-2">
                                 {filteredChains.map(group => (
-                                    <div key={group.family}>
-                                        <div className="px-4 py-2 text-xs font-bold text-zinc-500 bg-zinc-900/50 uppercase tracking-wider sticky top-0 backdrop-blur-sm">
+                                    <div key={group.family} className="mb-2 last:mb-0">
+                                        <div className="px-4 py-2 text-[10px] font-black text-zinc-600 bg-zinc-900/30 uppercase tracking-widest sticky top-0 backdrop-blur-sm rounded-lg mb-1">
                                             {group.family}
                                         </div>
                                         {group.chains.map(c => (
@@ -202,19 +202,19 @@ export function WalletNetworkSelector({
                                                     setChainDropdownOpen(false);
                                                     setChainSearch("");
                                                 }}
-                                                className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center justify-between group transition-colors"
+                                                className={`w-full text-left px-4 py-3 hover:bg-white/5 rounded-xl flex items-center justify-between group transition-all duration-200 ${selectedChainId === c.id ? "bg-white/5" : ""}`}
                                             >
-                                                <div className="flex items-center gap-2">
-                                                    <img src={c.logoURI} alt={c.name} className="w-5 h-5 rounded-full" />
-                                                    <span>{c.name}</span>
+                                                <div className="flex items-center gap-3">
+                                                    <img src={c.logoURI} alt={c.name} className="w-6 h-6 rounded-full" />
+                                                    <span className="font-semibold text-zinc-300 group-hover:text-white transition-colors">{c.name}</span>
                                                 </div>
-                                                {selectedChainId === c.id && <Check size={16} className="text-blue-500" />}
+                                                {selectedChainId === c.id && <Check size={16} className="text-purple-500" />}
                                             </button>
                                         ))}
                                     </div>
                                 ))}
                                 {filteredChains.length === 0 && (
-                                    <div className="px-4 py-3 text-zinc-500 text-sm italic">No networks found</div>
+                                    <div className="px-4 py-8 text-zinc-500 text-sm font-medium text-center">No networks found</div>
                                 )}
                             </div>
                         </div>
@@ -225,39 +225,39 @@ export function WalletNetworkSelector({
 
             {/* Asset Selector */}
             <div className="space-y-2 relative">
-                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">Asset</label>
+                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Asset</label>
                 <div className="relative">
                     <button
                         type="button"
                         onClick={() => setAssetDropdownOpen(!assetDropdownOpen)}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none flex items-center justify-between transition-all hover:border-zinc-700"
+                        className="w-full bg-zinc-900/30 border border-white/5 rounded-2xl px-5 py-4 text-white focus:outline-none focus:bg-zinc-900/50 flex items-center justify-between transition-all hover:border-white/10 hover:bg-zinc-900/50"
                     >
-                        <div className="flex items-center gap-2">
-                            {selectedAsset?.logo ? <img src={selectedAsset.logo} className="w-5 h-5 rounded-full" /> : <Coins size={16} className="text-zinc-500" />}
-                            <span>{selectedAsset?.symbol || "Select Asset"}</span>
+                        <div className="flex items-center gap-3">
+                            {selectedAsset?.logo ? <img src={selectedAsset.logo} className="w-6 h-6 rounded-full" /> : <Coins size={20} className="text-zinc-500" />}
+                            <span className="font-bold text-sm tracking-tight">{selectedAsset?.symbol || "Select Asset"}</span>
                         </div>
-                        <ChevronDown size={16} className={`text-zinc-500 transition-transform ${assetDropdownOpen ? "rotate-180" : ""}`} />
+                        <ChevronDown size={18} className={`text-zinc-500 transition-transform duration-300 ${assetDropdownOpen ? "rotate-180" : ""}`} />
                     </button>
 
                     {assetDropdownOpen && (
-                        <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl z-30 max-h-60 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2">
-                            <div className="p-2 border-b border-zinc-800 sticky top-0 bg-zinc-900 z-10">
+                        <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-950/95 border border-white/10 rounded-2xl shadow-2xl z-30 max-h-80 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 backdrop-blur-3xl">
+                            <div className="p-3 border-b border-white/5 sticky top-0 bg-zinc-950/90 z-10 backdrop-blur-md">
                                 <div className="relative">
-                                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                                    <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" />
                                     <input
                                         type="text"
                                         placeholder="Search asset..."
                                         value={assetSearch}
                                         onChange={(e) => setAssetSearch(e.target.value)}
                                         onClick={(e) => e.stopPropagation()}
-                                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                        className="w-full bg-zinc-900/50 border border-white/5 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder:text-zinc-600 font-medium"
                                         autoFocus
                                     />
                                 </div>
                             </div>
-                            <div className="overflow-y-auto max-h-48">
+                            <div className="overflow-y-auto max-h-64 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent p-2">
                                 {loading && !filteredAssets.length ? (
-                                    <div className="px-4 py-4 text-center text-zinc-500 text-xs">Loading tokens...</div>
+                                    <div className="px-4 py-8 text-center text-zinc-500 text-xs font-medium animate-pulse">Loading tokens...</div>
                                 ) : (
                                     filteredAssets.slice(0, 100).map((t, idx) => (
                                         <button
@@ -268,21 +268,21 @@ export function WalletNetworkSelector({
                                                 setAssetDropdownOpen(false);
                                                 setAssetSearch("");
                                             }}
-                                            className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center justify-between group transition-colors"
+                                            className={`w-full text-left px-4 py-3 hover:bg-white/5 rounded-xl flex items-center justify-between group transition-all duration-200 ${selectedAsset?.address === t.address ? "bg-white/5" : ""}`}
                                         >
-                                            <div className="flex items-center gap-2">
-                                                {t.logo ? <img src={t.logo} className="w-5 h-5 rounded-full" /> : <Coins size={16} className="text-zinc-500" />}
+                                            <div className="flex items-center gap-3">
+                                                {t.logo ? <img src={t.logo} className="w-8 h-8 rounded-full" /> : <div className="w-8 h-8 rounded-full bg-zinc-800/50 flex items-center justify-center"><Coins size={16} className="text-zinc-600" /></div>}
                                                 <div>
-                                                    <span className="text-sm font-medium block">{t.symbol}</span>
-                                                    <span className="text-xs text-zinc-500 block">{t.name}</span>
+                                                    <span className="text-sm font-bold text-zinc-200 group-hover:text-white block">{t.symbol}</span>
+                                                    <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wide block">{t.name}</span>
                                                 </div>
                                             </div>
-                                            {selectedAsset?.address === t.address && <Check size={16} className="text-blue-500" />}
+                                            {selectedAsset?.address === t.address && <Check size={16} className="text-purple-500" />}
                                         </button>
                                     ))
                                 )}
                                 {!loading && filteredAssets.length === 0 && (
-                                    <div className="px-4 py-3 text-zinc-500 text-sm italic">No assets found</div>
+                                    <div className="px-4 py-8 text-zinc-500 text-sm font-medium text-center">No assets found</div>
                                 )}
                             </div>
                         </div>

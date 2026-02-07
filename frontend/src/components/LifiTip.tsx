@@ -284,7 +284,7 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
             <div className="flex flex-col lg:flex-row gap-8 items-start lg:items-end">
 
                 {/* Left Column: Network & Amount */}
-                <div className="flex-1 w-full space-y-6">
+                <div className="flex-1 w-full space-y-8">
                     <WalletNetworkSelector
                         selectedChainId={selectedChainId}
                         onChainSelect={handleChainSelect}
@@ -294,30 +294,31 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
 
                     {/* Amount Input */}
                     <div>
-                        <div className="flex justify-between items-center mb-2">
-                            <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Amount</label>
-                            <div className="text-xs text-zinc-500 font-mono">
-                                Balance: <span className="text-white">{displayBalance}</span>
+                        <div className="flex justify-between items-center mb-3">
+                            <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Amount</label>
+                            <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
+                                Balance: <span className="text-zinc-300">{displayBalance}</span>
                             </div>
                         </div>
 
                         <div className="relative group">
+                            <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent scale-x-0 group-focus-within:scale-x-100 transition-transform duration-500"></div>
                             <input
                                 type="number"
                                 placeholder="0.00"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-6 text-3xl font-bold text-center text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all placeholder:text-zinc-800 group-hover:border-zinc-700"
+                                className="w-full bg-zinc-900/30 border border-white/5 rounded-2xl px-4 py-8 text-5xl font-black text-center text-white focus:outline-none focus:bg-zinc-900/50 transition-all placeholder:text-zinc-800"
                             />
-                            <div className="absolute top-1/2 right-4 -translate-y-1/2 text-zinc-500 font-bold pointer-events-none">{selectedAsset?.symbol}</div>
+                            <div className="absolute top-1/2 right-6 -translate-y-1/2 text-zinc-600 font-black text-lg pointer-events-none">{selectedAsset?.symbol}</div>
                         </div>
 
-                        <div className="grid grid-cols-4 gap-2 mt-2">
+                        <div className="grid grid-cols-4 gap-3 mt-4">
                             {PRESET_AMOUNTS.map((val) => (
                                 <button
                                     key={val}
                                     onClick={() => setAmount(val)}
-                                    className={`py-2 text-xs font-medium rounded-lg border transition-all ${amount === val ? "bg-purple-600/20 border-purple-500/50 text-purple-200" : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:border-zinc-700"}`}
+                                    className={`py-2.5 text-xs font-bold rounded-xl border transition-all duration-300 ${amount === val ? "bg-purple-500 text-white border-purple-500 shadow-lg shadow-purple-500/25 scale-[1.02]" : "bg-zinc-900/30 border-white/5 text-zinc-500 hover:bg-white/5 hover:text-white"}`}
                                 >
                                     {val}
                                 </button>
@@ -328,21 +329,23 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
 
                 {/* Right Column: Desktop Preview */}
                 <div className="hidden lg:block w-96 shrink-0 sticky top-24">
-                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1 mb-4 block">Stream Preview</label>
-                    <TipWidget tip={previewTip} config={previewConfig} isPreview={true} />
-                    <p className="text-[10px] text-zinc-600 mt-2 text-center">
+                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1 mb-4 block">Stream Preview</label>
+                    <div className="transform transition-transform hover:scale-[1.02] duration-300">
+                        <TipWidget tip={previewTip} config={previewConfig} isPreview={true} />
+                    </div>
+                    <p className="text-[10px] text-zinc-600 mt-3 text-center font-medium">
                         This is how your alert will appear on stream
                     </p>
                 </div>
             </div>
 
             {/* Bottom Row: Message, Name, Actions (Full Width) */}
-            <div className="space-y-6">
+            <div className="space-y-8">
                 {/* Message Input */}
                 <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Message</label>
-                        <span className="text-xs text-zinc-600">{message.length}/500</span>
+                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Message</label>
+                        <span className="text-[10px] font-bold text-zinc-600">{message.length}/500</span>
                     </div>
                     <textarea
                         placeholder="Write your tip message here..."
@@ -351,15 +354,15 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
                         onChange={(e) => {
                             if (e.target.value.length <= 500) setMessage(e.target.value);
                         }}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all placeholder:text-zinc-700 resize-none h-24 text-sm"
+                        className="w-full bg-zinc-900/30 border border-white/5 rounded-2xl p-5 text-white focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500/50 outline-none transition-all placeholder:text-zinc-700 resize-none h-32 text-sm font-medium leading-relaxed"
                     />
                 </div>
 
                 {/* Name Input */}
                 <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Name</label>
-                        <span className="text-xs text-zinc-600">{senderName.length}/20</span>
+                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Name</label>
+                        <span className="text-[10px] font-bold text-zinc-600">{senderName.length}/20</span>
                     </div>
                     <input
                         type="text"
@@ -370,28 +373,28 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
                             const val = e.target.value.replace(/\./g, ""); // Remove periods
                             if (val.length <= 20) setSenderName(val);
                         }}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all placeholder:text-zinc-700 text-sm"
+                        className="w-full bg-zinc-900/30 border border-white/5 rounded-2xl p-4 text-white focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500/50 outline-none transition-all placeholder:text-zinc-700 text-sm font-bold"
                     />
                 </div>
 
                 {/* Actions */}
-                <div className="space-y-4">
-                    <div className={`w-full transition-all ${isConnected && currentAddress ? "flex items-center justify-between px-4 py-3 bg-zinc-950/80 rounded-xl border border-zinc-800/50 backdrop-blur-sm shadow-sm hover:border-zinc-700" : ""}`}>
+                <div className="space-y-4 pt-4">
+                    <div className={`w-full transition-all duration-300 ${isConnected && currentAddress ? "flex items-center justify-between px-5 py-4 bg-zinc-900/40 rounded-2xl border border-white/5 backdrop-blur-sm" : ""}`}>
                         {isConnected && currentAddress ? (
                             <>
-                                <div className="flex items-center gap-3 w-full overflow-hidden">
+                                <div className="flex items-center gap-4 w-full overflow-hidden">
                                     <div className="flex flex-col w-full">
-                                        <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-0.5">Connected</span>
-                                        <span className="text-sm font-medium text-zinc-300 font-mono truncate w-full">
+                                        <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-0.5">Connected Wallet</span>
+                                        <span className="text-sm font-bold text-zinc-200 font-mono truncate w-full tracking-tight">
                                             {currentAddress}
                                         </span>
                                     </div>
                                 </div>
                                 <button
                                     onClick={handleDisconnect}
-                                    className="text-xs font-bold text-red-400 hover:text-red-300 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-500/10"
+                                    className="text-[10px] font-black text-red-400 hover:text-red-300 transition-colors px-4 py-2 rounded-lg hover:bg-red-500/10 uppercase tracking-wider"
                                 >
-                                    DISCONNECT
+                                    Disconnect
                                 </button>
                             </>
                         ) : (
@@ -412,21 +415,26 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
                             <button
                                 onClick={handleTip}
                                 disabled={loading || !amount || parseFloat(amount) <= 0}
-                                className="w-full py-4 rounded-xl bg-white text-black font-black text-xl hover:bg-zinc-200 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-[0_0_20px_-5px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_-5px_rgba(255,255,255,0.5)]"
+                                className="w-full py-5 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 bg-[length:200%_auto] hover:bg-right transition-all duration-500 text-white font-black text-xl active:scale-[0.98] disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-[0_0_30px_-5px_rgba(147,51,234,0.3)] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] transform hover:-translate-y-1"
                             >
                                 {loading ? (
                                     <>
-                                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                                        Processing...
+                                        <div className="w-5 h-5 border-3 border-white/20 border-t-white rounded-full animate-spin" />
+                                        <span className="text-lg">Processing...</span>
                                     </>
-                                ) : "Send"}
+                                ) : (
+                                    <>
+                                        Send
+                                        <Coins className="w-5 h-5 opacity-80" />
+                                    </>
+                                )}
                             </button>
                             {error && (
-                                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 text-red-400 text-xs animate-in fade-in slide-in-from-top-1">
-                                    <div className="bg-red-500/20 p-1 rounded-full shrink-0">
-                                        <span className="block w-1.5 h-1.5 bg-red-500 rounded-full" />
+                                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-start gap-3 text-red-400 text-xs animate-in fade-in slide-in-from-top-1">
+                                    <div className="bg-red-500/20 p-1.5 rounded-full shrink-0">
+                                        <AlertTriangle className="w-4 h-4 text-red-500" />
                                     </div>
-                                    <p className="font-medium break-all">{error}</p>
+                                    <p className="font-bold leading-relaxed pt-0.5">{error}</p>
                                 </div>
                             )}
                         </>
