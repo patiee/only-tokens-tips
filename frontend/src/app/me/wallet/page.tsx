@@ -214,25 +214,28 @@ function WalletsContent() {
     const canSave = (isDifferent || prefsChanged) && (!isWalletMismatch || (prefsChanged && !isDifferent && savedAddressCompatible));
 
     return (
-        <div className="min-h-screen bg-black text-white p-4 sm:p-8">
-            <div className="max-w-3xl mx-auto space-y-8">
+        <div className="min-h-screen bg-black text-white selection:bg-purple-500/30 relative">
+            {/* Global Gradient Background */}
+            <div className="fixed inset-0 bg-gradient-to-br from-purple-900/20 via-black to-blue-900/10 pointer-events-none" />
+
+            <div className="max-w-3xl mx-auto space-y-8 p-4 sm:p-8 relative z-10">
 
                 <div className="flex items-center gap-4">
-                    <Link href="/me" className="p-2 rounded-full bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors">
+                    <Link href="/me" className="p-2 rounded-full bg-zinc-900/50 hover:bg-zinc-800 border border-white/5 text-zinc-400 hover:text-white transition-colors">
                         <ArrowLeft size={20} />
                     </Link>
-                    <h1 className="text-2xl font-bold">Manage Wallet</h1>
+                    <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-400">Manage Wallet</h1>
                 </div>
 
                 {message && (
-                    <div className="bg-green-500/10 border border-green-500/20 p-4 rounded-xl flex items-center gap-3 text-green-400 animate-in fade-in slide-in-from-top-2">
+                    <div className="bg-green-500/10 border border-green-500/20 p-4 rounded-xl flex items-center gap-3 text-green-400 animate-in fade-in slide-in-from-top-2 backdrop-blur-sm">
                         <CheckCircle size={20} />
                         {message}
                     </div>
                 )}
 
                 {/* Main Settings Panel */}
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-6">
+                <div className="bg-zinc-900/40 backdrop-blur-xl border border-white/5 rounded-3xl p-6 space-y-6 shadow-2xl">
                     <div>
                         <h2 className="text-lg font-bold flex items-center gap-2 mb-2">
                             <Wallet className="text-blue-400" /> Wallet Settings
@@ -254,7 +257,7 @@ function WalletsContent() {
                     <div>
                         <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-4">Saved Wallet Address</h3>
                         {profile?.wallet_address ? (
-                            <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 mb-6 flex items-center justify-between">
+                            <div className="bg-black/40 border border-white/5 rounded-xl p-4 mb-6 flex items-center justify-between">
                                 <div className="flex flex-col">
                                     <span className="text-xs text-zinc-500 mb-1">Current Saved Address</span>
                                     <span className="font-mono text-sm text-white break-all">{profile.wallet_address}</span>
@@ -264,7 +267,7 @@ function WalletsContent() {
                                 </div>
                             </div>
                         ) : (
-                            <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 mb-6 text-zinc-500 text-sm">
+                            <div className="bg-black/40 border border-white/5 rounded-xl p-4 mb-6 text-zinc-500 text-sm">
                                 No wallet address saved yet.
                             </div>
                         )}
@@ -286,8 +289,8 @@ function WalletsContent() {
                                 onClick={handleSaveWallet}
                                 disabled={saving || !canSave}
                                 className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${saving || !canSave
-                                    ? "bg-zinc-800 text-zinc-400 cursor-not-allowed opacity-50"
-                                    : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20"
+                                    ? "bg-zinc-800/50 text-zinc-500 cursor-not-allowed"
+                                    : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-900/20"
                                     }`}
                             >
                                 {saving ? (

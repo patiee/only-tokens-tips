@@ -117,32 +117,34 @@ function TipsContent() {
     );
 
     return (
-        <div className="min-h-screen bg-black text-white p-4 sm:p-8">
-            <div className="max-w-6xl mx-auto space-y-8">
+        <div className="min-h-screen bg-black text-white selection:bg-purple-500/30 relative">
+            {/* Global Gradient Background */}
+            <div className="fixed inset-0 bg-gradient-to-br from-purple-900/20 via-black to-blue-900/10 pointer-events-none" />
+
+            <div className="max-w-6xl mx-auto space-y-8 p-4 sm:p-8 relative z-10">
                 {/* Header */}
-                <header className="flex items-center justify-between border-b border-zinc-800 pb-8">
+                <header className="flex items-center justify-between border-b border-white/5 pb-8">
                     <div className="flex items-center gap-4">
-                        <Link href="/me" className="p-2 rounded-full bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors">
+                        <Link href="/me" className="p-2 rounded-full bg-zinc-900/50 hover:bg-zinc-800 border border-white/5 text-zinc-400 hover:text-white transition-colors">
                             <ArrowLeft size={20} />
                         </Link>
                         <div>
-                            <h1 className="text-3xl font-bold">All Tips</h1>
+                            <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-400">All Tips</h1>
                             <p className="text-zinc-400 text-sm">History of all transactions received.</p>
                         </div>
                     </div>
-                    {/* Add Export Button later? */}
                 </header>
 
                 {error && (
-                    <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-red-400">
+                    <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-red-400 backdrop-blur-sm">
                         Error: {error}
                     </div>
                 )}
 
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 overflow-hidden">
+                <div className="bg-zinc-900/40 backdrop-blur-xl border border-white/5 rounded-3xl p-6 shadow-2xl overflow-hidden">
                     {tips.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-64 text-zinc-500 gap-4">
-                            <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center">
+                            <div className="w-16 h-16 rounded-full bg-zinc-800/50 flex items-center justify-center border border-white/5">
                                 <DollarSign size={24} className="text-zinc-600" />
                             </div>
                             <p>No tips found.</p>
@@ -151,7 +153,7 @@ function TipsContent() {
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="border-b border-zinc-800 text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                                    <tr className="border-b border-white/5 text-xs font-bold text-zinc-500 uppercase tracking-wider">
                                         <th className="py-3 px-4">Date</th>
                                         <th className="py-3 px-4">Sender</th>
                                         <th className="py-3 px-4">Amount</th>
@@ -159,11 +161,11 @@ function TipsContent() {
                                         <th className="py-3 px-4">Tx Hash</th>
                                     </tr>
                                 </thead>
-                                <tbody className="text-sm divide-y divide-zinc-800/50">
+                                <tbody className="text-sm divide-y divide-white/5">
                                     {tips.map((tip, i) => (
-                                        <tr key={i} className="hover:bg-zinc-800/30 transition-colors">
-                                            <td className="py-3 px-4 text-zinc-400 whitespace-nowrap">
-                                                {new Date(tip.created_at).toLocaleDateString()} <span className="text-zinc-600">|</span> {new Date(tip.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        <tr key={i} className="hover:bg-white/5 transition-colors group">
+                                            <td className="py-3 px-4 text-zinc-400 whitespace-nowrap group-hover:text-zinc-300 transition-colors">
+                                                {new Date(tip.created_at).toLocaleDateString()} <span className="text-zinc-600 group-hover:text-zinc-500">|</span> {new Date(tip.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                             </td>
                                             <td className="py-3 px-4 font-medium text-white">{tip.sender}</td>
                                             <td className="py-3 px-4 text-green-400 font-mono">
@@ -175,10 +177,10 @@ function TipsContent() {
                                             <td className="py-3 px-4">
                                                 {tip.tx_hash ? (
                                                     <a
-                                                        href={`https://basescan.org/tx/${tip.tx_hash}`} // TODO: Dynamic block explorer based on chain?
+                                                        href={`https://basescan.org/tx/${tip.tx_hash}`} // TODO: Dynamic
                                                         target="_blank"
                                                         rel="noreferrer"
-                                                        className="text-purple-400 hover:text-purple-300 text-xs bg-purple-500/10 px-2 py-1 rounded border border-purple-500/20 flex items-center gap-1 w-fit"
+                                                        className="text-purple-400 hover:text-purple-300 text-xs bg-purple-500/10 px-2 py-1 rounded border border-purple-500/20 flex items-center gap-1 w-fit transition-colors hover:bg-purple-500/20"
                                                     >
                                                         View <ExternalLink size={10} />
                                                     </a>
@@ -192,7 +194,7 @@ function TipsContent() {
                     )}
 
                     {/* Pagination Controls */}
-                    <div className="flex items-center justify-between mt-6 pt-6 border-t border-zinc-800">
+                    <div className="flex items-center justify-between mt-6 pt-6 border-t border-white/5">
                         <div className="text-xs text-zinc-500">
                             Page {page} {nextCursor ? "(More available)" : "(End of list)"}
                         </div>
@@ -200,14 +202,14 @@ function TipsContent() {
                             <button
                                 onClick={handleRefresh} // Reset to start
                                 disabled={page === 1}
-                                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm text-white transition-colors"
+                                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors border border-white/5 hover:border-white/10"
                             >
                                 First Page
                             </button>
                             <button
                                 onClick={handleNext}
                                 disabled={!nextCursor || loading}
-                                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm text-white transition-colors flex items-center gap-2"
+                                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors flex items-center gap-2 border border-white/5 hover:border-white/10"
                             >
                                 Next <ChevronRight size={14} />
                             </button>
@@ -215,8 +217,7 @@ function TipsContent() {
                     </div>
                 </div>
             </div>
-            {/* The menu is global, so it's already there via Layout, or we add it here explicitly if we want it isolated? 
-                Plan says Global Layout integration. */}
+            {/* The menu is global, no changes needed */}
         </div>
     );
 }

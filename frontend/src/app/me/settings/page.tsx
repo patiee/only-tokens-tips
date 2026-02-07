@@ -143,8 +143,11 @@ export default function SettingsPage() {
     };
 
     return (
-        <div className="min-h-screen bg-black text-white p-6 md:p-12 mb-20">
-            <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="min-h-screen bg-black text-white selection:bg-purple-500/30 relative mb-20">
+            {/* Global Gradient Background */}
+            <div className="fixed inset-0 bg-gradient-to-br from-purple-900/20 via-black to-blue-900/10 pointer-events-none" />
+
+            <div className="max-w-4xl mx-auto space-y-8 p-6 md:p-12 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <header>
                     <button
                         onClick={() => router.push("/me")}
@@ -152,7 +155,7 @@ export default function SettingsPage() {
                     >
                         <ArrowLeft size={16} /> Back to Dashboard
                     </button>
-                    <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-500">
+                    <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-400">
                         Account Settings
                     </h1>
                     <p className="text-zinc-400 mt-2">Manage your profile details and social connections.</p>
@@ -162,7 +165,7 @@ export default function SettingsPage() {
 
                     {/* Left Col: Edit Profile Form */}
                     <div className="md:col-span-2 space-y-6">
-                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                        <div className="bg-zinc-900/40 backdrop-blur-xl border border-white/5 rounded-3xl p-6 shadow-2xl">
                             <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
                                 <User className="text-blue-400" size={20} /> Edit Profile
                             </h2>
@@ -174,7 +177,7 @@ export default function SettingsPage() {
                                     <div className="relative group">
                                         {/* Background Image */}
                                         <div
-                                            className="w-full h-48 rounded-2xl bg-zinc-950 border border-zinc-800 overflow-hidden cursor-pointer relative"
+                                            className="w-full h-48 rounded-2xl bg-black/50 border border-white/5 overflow-hidden cursor-pointer relative transition-all hover:border-white/10"
                                             onClick={() => document.getElementById('bg-upload')?.click()}
                                         >
                                             {formData.background_url ? (
@@ -187,7 +190,7 @@ export default function SettingsPage() {
                                             )}
 
                                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <div className="bg-black/50 backdrop-blur-sm p-3 rounded-full">
+                                                <div className="bg-black/50 backdrop-blur-sm p-3 rounded-full border border-white/10">
                                                     <Upload className="text-white" size={24} />
                                                 </div>
                                             </div>
@@ -202,7 +205,7 @@ export default function SettingsPage() {
 
                                         {/* Avatar Image (Overlapping) */}
                                         <div
-                                            className="absolute -bottom-10 left-6 w-24 h-24 rounded-full border-4 border-zinc-900 bg-zinc-800 overflow-hidden cursor-pointer group/avatar"
+                                            className="absolute -bottom-10 left-6 w-24 h-24 rounded-full border-4 border-black bg-zinc-900 overflow-hidden cursor-pointer group/avatar shadow-xl"
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 document.getElementById('avatar-upload')?.click();
@@ -215,7 +218,7 @@ export default function SettingsPage() {
                                                     <User size={32} />
                                                 </div>
                                             )}
-                                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity bg-black/30">
+                                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity bg-black/40 backdrop-blur-[2px]">
                                                 <Upload className="text-white" size={20} />
                                             </div>
                                             <input
@@ -240,7 +243,7 @@ export default function SettingsPage() {
                                             name="username"
                                             value={formData.username}
                                             onChange={handleChange}
-                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-zinc-700"
+                                            className="w-full bg-black/50 border border-white/5 rounded-xl px-4 py-3 text-white focus:ring-1 focus:ring-purple-500/50 focus:border-purple-500/50 outline-none transition-all placeholder:text-zinc-700"
                                             placeholder="Username"
                                         />
                                     </div>
@@ -252,14 +255,14 @@ export default function SettingsPage() {
                                             value={formData.description}
                                             onChange={handleChange}
                                             rows={3}
-                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-zinc-700 resize-none"
+                                            className="w-full bg-black/50 border border-white/5 rounded-xl px-4 py-3 text-white focus:ring-1 focus:ring-purple-500/50 focus:border-purple-500/50 outline-none transition-all placeholder:text-zinc-700 resize-none"
                                             placeholder="Tell us about yourself..."
                                         />
                                     </div>
                                 </div>
 
                                 {message && (
-                                    <div className={`p-4 rounded-xl text-sm font-medium ${message.type === 'success' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
+                                    <div className={`p-4 rounded-xl text-sm font-medium border ${message.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'
                                         }`}>
                                         {message.text}
                                     </div>
@@ -269,7 +272,7 @@ export default function SettingsPage() {
                                     <button
                                         type="submit"
                                         disabled={saving}
-                                        className="w-full flex items-center justify-center gap-2 bg-white text-black hover:bg-zinc-200 font-bold py-3 px-6 rounded-xl transition-all disabled:opacity-50"
+                                        className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-blue-900/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {saving ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
                                         Save Changes
@@ -281,47 +284,47 @@ export default function SettingsPage() {
 
                     {/* Right Col: Social Connections */}
                     <div className="space-y-6">
-                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                        <div className="bg-zinc-900/40 backdrop-blur-xl border border-white/5 rounded-3xl p-6 shadow-2xl">
                             <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
                                 <Monitor className="text-purple-400" size={20} /> Connected Accounts
                             </h2>
 
                             <div className="space-y-4">
                                 {isConnected('google') ? (
-                                    <button disabled className="w-full flex items-center justify-between p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-500 text-sm font-bold cursor-default">
+                                    <button disabled className="w-full flex items-center justify-between p-3 rounded-xl bg-black/40 border border-white/5 text-zinc-500 text-sm font-bold cursor-default">
                                         <div className="flex items-center gap-3">
                                             <Chrome size={18} /> Google Connected
                                         </div>
                                         <Check size={16} className="text-green-500" />
                                     </button>
                                 ) : (
-                                    <button onClick={() => handleSocialConnect("google")} className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-950 border border-zinc-800 hover:bg-zinc-800 hover:border-zinc-700 transition-all text-sm font-medium text-zinc-300">
+                                    <button onClick={() => handleSocialConnect("google")} className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-900/50 border border-white/5 hover:bg-zinc-800 transition-all text-sm font-medium text-zinc-300 hover:text-white">
                                         <Chrome className="text-white" size={18} /> Connect Google
                                     </button>
                                 )}
 
                                 {isConnected('twitch') ? (
-                                    <button disabled className="w-full flex items-center justify-between p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-500 text-sm font-bold cursor-default">
+                                    <button disabled className="w-full flex items-center justify-between p-3 rounded-xl bg-black/40 border border-white/5 text-zinc-500 text-sm font-bold cursor-default">
                                         <div className="flex items-center gap-3">
                                             <Twitch size={18} /> Twitch Connected
                                         </div>
                                         <Check size={16} className="text-green-500" />
                                     </button>
                                 ) : (
-                                    <button onClick={() => handleSocialConnect("twitch")} className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-950 border border-zinc-800 hover:bg-[#9146FF]/10 hover:border-[#9146FF]/30 hover:text-[#9146FF] transition-all text-sm font-medium text-zinc-300">
+                                    <button onClick={() => handleSocialConnect("twitch")} className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-900/50 border border-white/5 hover:bg-[#9146FF]/10 hover:border-[#9146FF]/30 hover:text-[#9146FF] transition-all text-sm font-medium text-zinc-300">
                                         <Twitch className="text-[#9146FF]" size={18} /> Connect Twitch
                                     </button>
                                 )}
 
                                 {isConnected('kick') ? (
-                                    <button disabled className="w-full flex items-center justify-between p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-500 text-sm font-bold cursor-default">
+                                    <button disabled className="w-full flex items-center justify-between p-3 rounded-xl bg-black/40 border border-white/5 text-zinc-500 text-sm font-bold cursor-default">
                                         <div className="flex items-center gap-3">
                                             <Monitor size={18} /> Kick Connected
                                         </div>
                                         <Check size={16} className="text-green-500" />
                                     </button>
                                 ) : (
-                                    <button onClick={() => handleSocialConnect("kick")} className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-950 border border-zinc-800 hover:bg-[#53FC18]/10 hover:border-[#53FC18]/30 hover:text-[#53FC18] transition-all text-sm font-medium text-zinc-300">
+                                    <button onClick={() => handleSocialConnect("kick")} className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-900/50 border border-white/5 hover:bg-[#53FC18]/10 hover:border-[#53FC18]/30 hover:text-[#53FC18] transition-all text-sm font-medium text-zinc-300">
                                         <Monitor className="text-[#53FC18]" size={18} /> Connect Kick
                                     </button>
                                 )}

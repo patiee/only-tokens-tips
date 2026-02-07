@@ -206,12 +206,15 @@ function WidgetSettingsContent() {
     );
 
     return (
-        <div className="min-h-screen bg-black text-white p-4 sm:p-8 relative">
+        <div className="min-h-screen bg-black text-white selection:bg-purple-500/30 relative">
+            {/* Global Gradient Background */}
+            <div className="fixed inset-0 bg-gradient-to-br from-purple-900/20 via-black to-blue-900/10 pointer-events-none" />
+
             {/* Confirmation Modal */}
             {showConfirmModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
-                        <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-500/10 text-red-500 mb-4 mx-auto">
+                    <div className="bg-zinc-900 border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-500/10 text-red-500 mb-4 mx-auto border border-red-500/20">
                             <AlertTriangle size={24} />
                         </div>
                         <h3 className="text-xl font-bold text-center mb-2">Regenerate URL?</h3>
@@ -221,7 +224,7 @@ function WidgetSettingsContent() {
                         <div className="flex gap-3">
                             <button
                                 onClick={() => setShowConfirmModal(false)}
-                                className="flex-1 p-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-semibold transition-colors"
+                                className="flex-1 p-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-semibold transition-colors border border-white/5"
                             >
                                 Cancel
                             </button>
@@ -236,42 +239,42 @@ function WidgetSettingsContent() {
                 </div>
             )}
 
-            <div className="max-w-4xl mx-auto space-y-8">
+            <div className="max-w-4xl mx-auto space-y-8 p-4 sm:p-8 relative z-10">
 
                 {/* Header */}
                 <div className="flex items-center gap-4">
-                    <Link href="/me" className="p-2 rounded-full bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors">
+                    <Link href="/me" className="p-2 rounded-full bg-zinc-900/50 hover:bg-zinc-800 border border-white/5 text-zinc-400 hover:text-white transition-colors">
                         <ArrowLeft size={20} />
                     </Link>
-                    <h1 className="text-2xl font-bold">Widget Settings</h1>
+                    <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-400">Widget Settings</h1>
                 </div>
 
                 {message && (
-                    <div className="bg-green-500/10 border border-green-500/20 p-4 rounded-xl flex items-center gap-3 text-green-400 animate-in fade-in slide-in-from-top-2">
+                    <div className="bg-green-500/10 border border-green-500/20 p-4 rounded-xl flex items-center gap-3 text-green-400 animate-in fade-in slide-in-from-top-2 backdrop-blur-sm">
                         <CheckCircle size={20} />
                         {message}
                     </div>
                 )}
 
                 {error && (
-                    <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-center gap-3 text-red-400 animate-in fade-in slide-in-from-top-2">
+                    <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-center gap-3 text-red-400 animate-in fade-in slide-in-from-top-2 backdrop-blur-sm">
                         <AlertTriangle size={20} />
                         {error}
                     </div>
                 )}
 
                 {/* Widget URL Section - Moved to Top */}
-                <div className="bg-zinc-950 p-6 rounded-2xl border border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="bg-zinc-900/40 backdrop-blur-xl border border-white/5 rounded-3xl p-6 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div className="flex-1 w-full">
                         <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-2">Widget URL (Private)</h3>
-                        <div className="flex items-center gap-2 bg-black p-3 rounded-lg border border-zinc-800 font-mono text-sm text-zinc-300 break-all">
+                        <div className="flex items-center gap-2 bg-black/50 p-3 rounded-xl border border-white/5 font-mono text-sm text-zinc-300 break-all shadow-inner">
                             {window.location.origin}/widget/{settings.widget_token || '...'}
                         </div>
                         <p className="text-xs text-zinc-500 mt-2">
                             Add this URL as a Browser Source in your streaming software (OBS, Streamlabs). Keep it private.
                         </p>
                     </div>
-                    <div className="flex items-center gap-2 bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/50">
+                    <div className="flex items-center gap-2 bg-zinc-900/50 p-1 rounded-xl border border-white/5 shadow-sm">
                         <button
                             onClick={() => {
                                 navigator.clipboard.writeText(`${window.location.origin}/widget/${settings.widget_token || settings.widget_token}`);
@@ -296,7 +299,7 @@ function WidgetSettingsContent() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
 
                     {/* Left Column: Configuration */}
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-8">
+                    <div className="bg-zinc-900/40 backdrop-blur-xl border border-white/5 rounded-3xl p-6 space-y-8 shadow-2xl">
                         <div>
                             <h2 className="text-lg font-bold flex items-center gap-2 mb-6">
                                 <Monitor className="text-blue-400" /> Configuration
@@ -304,9 +307,9 @@ function WidgetSettingsContent() {
 
                             <div className="space-y-6">
                                 {/* TTS Toggle */}
-                                <div className="flex items-center justify-between p-4 bg-zinc-950 rounded-xl border border-zinc-800">
+                                <div className="flex items-center justify-between p-4 bg-black/20 rounded-xl border border-white/5">
                                     <div className="flex items-center gap-3">
-                                        <div className={`p-2 rounded-lg ${settings.tts_enabled ? "bg-purple-500/20 text-purple-400" : "bg-zinc-900 text-zinc-600"}`}>
+                                        <div className={`p-2 rounded-lg ${settings.tts_enabled ? "bg-purple-500/20 text-purple-400" : "bg-zinc-900/50 text-zinc-600"}`}>
                                             <Volume2 size={20} />
                                         </div>
                                         <div>
@@ -321,7 +324,7 @@ function WidgetSettingsContent() {
                                             checked={settings.tts_enabled}
                                             onChange={(e) => setSettings({ ...settings, tts_enabled: e.target.checked })}
                                         />
-                                        <div className="w-11 h-6 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                                        <div className="w-11 h-6 bg-zinc-800/50 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:to-blue-600"></div>
                                     </label>
                                 </div>
 
@@ -334,7 +337,7 @@ function WidgetSettingsContent() {
                                         presets={["#000000", "#18181b", "#0f172a", "#1e1b4b", "#00000000"]}
                                     />
 
-                                    <div className="pt-2 border-t border-zinc-800/50">
+                                    <div className="pt-2 border-t border-white/5">
                                         <h3 className="text-xs font-bold text-zinc-500 mb-4 uppercase tracking-wider">Text Colors</h3>
                                         <div className="space-y-6">
                                             <ColorPicker
@@ -358,11 +361,11 @@ function WidgetSettingsContent() {
                             </div>
                         </div>
 
-                        <div className="pt-4 border-t border-zinc-800">
+                        <div className="pt-4 border-t border-white/5">
                             <button
                                 onClick={handleSave}
                                 disabled={saving}
-                                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {saving ? (
                                     <span className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
@@ -376,12 +379,12 @@ function WidgetSettingsContent() {
 
                     {/* Right Column: Preview */}
                     <div className="space-y-6 lg:sticky lg:top-8 h-fit">
-                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                        <div className="bg-zinc-900/40 backdrop-blur-xl border border-white/5 rounded-3xl p-6 shadow-2xl">
                             <h2 className="text-lg font-bold flex items-center gap-2 mb-6">
                                 Preview
                             </h2>
 
-                            <div className="bg-checkerboard p-8 rounded-xl border border-zinc-800 min-h-[400px] flex items-center justify-center overflow-hidden relative">
+                            <div className="bg-checkerboard p-8 rounded-xl border border-white/5 min-h-[400px] flex items-center justify-center overflow-hidden relative shadow-inner bg-black/20">
                                 <div className="absolute inset-0 opacity-20 pointer-events-none"
                                     style={{
                                         backgroundImage: "conic-gradient(#333 90deg, transparent 90deg)",
