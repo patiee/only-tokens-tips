@@ -267,7 +267,7 @@ function DashboardContent() {
 
                     {/* Right Col: Recent Activity (Placeholder) */}
                     <div className="lg:col-span-2">
-                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 h-full min-h-[400px]">
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 h-full min-h-[400px] flex flex-col">
                             <div className="flex justify-between items-center mb-6">
                                 <h3 className="text-lg font-bold flex items-center gap-2">
                                     <DollarSign className="text-green-400" /> Recent Tips
@@ -282,7 +282,7 @@ function DashboardContent() {
                             </div>
 
                             {tips.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-64 text-zinc-500 gap-4 border-2 border-dashed border-zinc-800 rounded-xl bg-zinc-900/50">
+                                <div className="flex flex-col items-center justify-center flex-1 w-full text-zinc-500 gap-4 border-2 border-dashed border-zinc-800 rounded-xl bg-zinc-900/50 h-full min-h-[300px]">
                                     <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center">
                                         <DollarSign size={24} className="text-zinc-600" />
                                     </div>

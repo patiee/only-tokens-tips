@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { User, Image as ImageIcon, FileText, Check, Save, Loader2, Twitch, Monitor, Chrome, AlertTriangle, ArrowLeft } from "lucide-react";
+// ... (Previous imports)
+import { User, Image as ImageIcon, FileText, Check, Save, Loader2, Twitch, Monitor, Chrome, AlertTriangle, ArrowLeft, Upload } from "lucide-react";
 
 export default function SettingsPage() {
     const router = useRouter();
@@ -82,10 +83,6 @@ export default function SettingsPage() {
         const token = localStorage.getItem("user_token");
         if (!token) return;
 
-        // Call Backend to get Link URL (Signed State)
-        // If we just use /auth/:provider/login?link=true, we need to pass Authorization header.
-        // But window.location cannot pass headers.
-        // So we fetch() first to get the URL.
         try {
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/auth/${provider}/login?link=true`, {
                 headers: {
@@ -113,10 +110,41 @@ export default function SettingsPage() {
 
     const isConnected = (p: string) => profile?.connected_providers?.includes(p);
 
+    const handleFileUpload = async (file: File, type: 'avatar' | 'background') => {
+        const token = localStorage.getItem("user_token");
+        if (!token) return;
+
+        // Optimistic UI could show uploading state but let's keep it simple
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/upload`, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${token}`
+                },
+                body: formData
+            });
+
+            if (!res.ok) throw new Error("Upload failed");
+
+            const data = await res.json();
+            if (type === 'avatar') {
+                setFormData(prev => ({ ...prev, avatar_url: data.url }));
+            } else {
+                setFormData(prev => ({ ...prev, background_url: data.url }));
+            }
+            setMessage({ type: 'success', text: "Image uploaded successfully" });
+        } catch (e) {
+            console.error(e);
+            setMessage({ type: 'error', text: "Failed to upload image" });
+        }
+    };
+
     return (
         <div className="min-h-screen bg-black text-white p-6 md:p-12 mb-20">
             <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-
                 <header>
                     <button
                         onClick={() => router.push("/me")}
@@ -140,58 +168,93 @@ export default function SettingsPage() {
                             </h2>
 
                             <form onSubmit={handleSubmit} className="space-y-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Username</label>
-                                    <input
-                                        type="text"
-                                        name="username"
-                                        value={formData.username}
-                                        onChange={handleChange}
-                                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-zinc-700"
-                                        placeholder="Username"
-                                    />
-                                </div>
 
-                                <div>
-                                    <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Description</label>
-                                    <textarea
-                                        name="description"
-                                        value={formData.description}
-                                        onChange={handleChange}
-                                        rows={3}
-                                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-zinc-700 resize-none"
-                                        placeholder="Tell us about yourself..."
-                                    />
-                                </div>
+                                {/* Profile Images Section */}
+                                <div className="space-y-4 mb-8">
+                                    <div className="relative group">
+                                        {/* Background Image */}
+                                        <div
+                                            className="w-full h-48 rounded-2xl bg-zinc-950 border border-zinc-800 overflow-hidden cursor-pointer relative"
+                                            onClick={() => document.getElementById('bg-upload')?.click()}
+                                        >
+                                            {formData.background_url ? (
+                                                <img src={formData.background_url} alt="Background" className="w-full h-full object-cover transition-opacity group-hover:opacity-75" />
+                                            ) : (
+                                                <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600 gap-2">
+                                                    <FileText size={32} />
+                                                    <span className="text-xs font-bold uppercase tracking-wider">Upload Cover</span>
+                                                </div>
+                                            )}
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Avatar URL</label>
-                                        <div className="relative">
-                                            <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" size={16} />
+                                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <div className="bg-black/50 backdrop-blur-sm p-3 rounded-full">
+                                                    <Upload className="text-white" size={24} />
+                                                </div>
+                                            </div>
                                             <input
-                                                type="text"
-                                                name="avatar_url"
-                                                value={formData.avatar_url}
-                                                onChange={handleChange}
-                                                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-zinc-700 text-sm"
-                                                placeholder="https://..."
+                                                id="bg-upload"
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'background')}
+                                            />
+                                        </div>
+
+                                        {/* Avatar Image (Overlapping) */}
+                                        <div
+                                            className="absolute -bottom-10 left-6 w-24 h-24 rounded-full border-4 border-zinc-900 bg-zinc-800 overflow-hidden cursor-pointer group/avatar"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                document.getElementById('avatar-upload')?.click();
+                                            }}
+                                        >
+                                            {formData.avatar_url ? (
+                                                <img src={formData.avatar_url} alt="Avatar" className="w-full h-full object-cover transition-opacity group-hover/avatar:opacity-75" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-zinc-500">
+                                                    <User size={32} />
+                                                </div>
+                                            )}
+                                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity bg-black/30">
+                                                <Upload className="text-white" size={20} />
+                                            </div>
+                                            <input
+                                                id="avatar-upload"
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'avatar')}
                                             />
                                         </div>
                                     </div>
+
+                                    {/* Spacer for overlapping avatar */}
+                                    <div className="h-6"></div>
+                                </div>
+
+                                <div className="space-y-4 pt-4">
                                     <div>
-                                        <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Background URL</label>
-                                        <div className="relative">
-                                            <FileText className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" size={16} />
-                                            <input
-                                                type="text"
-                                                name="background_url"
-                                                value={formData.background_url}
-                                                onChange={handleChange}
-                                                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-zinc-700 text-sm"
-                                                placeholder="https://..."
-                                            />
-                                        </div>
+                                        <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Username</label>
+                                        <input
+                                            type="text"
+                                            name="username"
+                                            value={formData.username}
+                                            onChange={handleChange}
+                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-zinc-700"
+                                            placeholder="Username"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Description</label>
+                                        <textarea
+                                            name="description"
+                                            value={formData.description}
+                                            onChange={handleChange}
+                                            rows={3}
+                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-zinc-700 resize-none"
+                                            placeholder="Tell us about yourself..."
+                                        />
                                     </div>
                                 </div>
 

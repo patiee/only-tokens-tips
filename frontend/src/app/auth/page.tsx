@@ -58,7 +58,14 @@ function AuthContent() {
             return;
         }
 
+        // Check for existing session (and prevent redirect if we are in signup flow)
+        const storedToken = localStorage.getItem("user_token");
         const signupToken = searchParams.get("signup_token");
+        if (storedToken && !signupToken && !error && !token) {
+            router.replace("/me");
+            return;
+        }
+
         const urlStep = searchParams.get("step");
         const urlUsername = searchParams.get("username");
 

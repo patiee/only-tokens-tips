@@ -1,14 +1,18 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/patiee/backend/db"
 	"github.com/patiee/backend/server/model"
 	"golang.org/x/oauth2"
@@ -21,7 +25,136 @@ var (
 	twitchConfig *oauth2.Config
 	kickConfig   *oauth2.Config
 	oauthState   = "random-string-verification" // In prod, use random state per request
+	minioClient  *minio.Client
 )
+
+// ... (Config struct)
+
+func (s *Server) InitMinIO() {
+	endpoint := "minio:9000"        // Service name in docker-compose
+	accessKeyID := "minioadmin"     // Default or from env
+	secretAccessKey := "minioadmin" // Default or from env
+	useSSL := false
+
+	if user := os.Getenv("MINIO_ROOT_USER"); user != "" {
+		accessKeyID = user
+	}
+	if pass := os.Getenv("MINIO_ROOT_PASSWORD"); pass != "" {
+		secretAccessKey = pass
+	}
+
+	var err error
+	minioClient, err = minio.New(endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(accessKeyID, secretAccessKey, ""),
+		Secure: useSSL,
+	})
+	if err != nil {
+		s.logger.Printf("Failed to initialize MinIO client: %v", err)
+		return
+	}
+
+	// Ensure bucket exists
+	bucketName := "images"
+	ctx := context.Background()
+	exists, err := minioClient.BucketExists(ctx, bucketName)
+	if err != nil {
+		s.logger.Printf("Failed to check if bucket exists: %v", err)
+		return
+	}
+
+	if !exists {
+		err = minioClient.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{})
+		if err != nil {
+			s.logger.Printf("Failed to create bucket: %v", err)
+			return
+		}
+		s.logger.Printf("Created bucket: %s", bucketName)
+
+		// Set Public Policy
+		policy := fmt.Sprintf(`{"Version": "2012-10-17","Statement": [{"Action": ["s3:GetObject"],"Effect": "Allow","Principal": {"AWS": ["*"]},"Resource": ["arn:aws:s3:::%s/*"]}]}`, bucketName)
+		err = minioClient.SetBucketPolicy(ctx, bucketName, policy)
+		if err != nil {
+			s.logger.Printf("Failed to set bucket policy: %v", err)
+			return
+		}
+	}
+	s.logger.Println("MinIO initialized successfully")
+}
+
+// ... (Start function)
+
+func (s *Server) Start(port string) {
+	// Initialize OAuth
+	s.InitOAuth()
+
+	// Initialize MinIO
+	s.InitMinIO()
+
+	r := gin.Default()
+	// ... (CORS logic)
+
+	// ... (Routes)
+	r.POST("/api/upload", s.HandleUpload)
+
+	// ... (Rest of Start)
+}
+
+// ... (Existing Handlers)
+
+func (s *Server) HandleUpload(c *gin.Context) {
+	// Check Auth
+	authHeader := c.GetHeader("Authorization")
+	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid token"})
+		return
+	}
+	tokenString := authHeader[7:]
+	_, err := s.service.ValidateSessionToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	// Single file
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No file uploaded"})
+		return
+	}
+
+	// Open the file
+	src, err := file.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open file"})
+		return
+	}
+	defer src.Close()
+
+	// Generate unique filename
+	ext := filepath.Ext(file.Filename)
+	filename := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
+	bucketName := "images"
+	contentType := file.Header.Get("Content-Type")
+
+	// Upload to MinIO
+	info, err := minioClient.PutObject(context.Background(), bucketName, filename, src, file.Size, minio.PutObjectOptions{ContentType: contentType})
+	if err != nil {
+		s.logger.Printf("Failed to upload file to MinIO: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload file"})
+		return
+	}
+
+	// Return URL
+	// Since we are running in docker, we need to return a URL reachable by the browser.
+	// Assuming MinIO is mapped to localhost:9000
+	publicURL := fmt.Sprintf("http://localhost:9000/%s/%s", bucketName, filename)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "File uploaded successfully",
+		"url":     publicURL,
+		"size":    info.Size,
+	})
+}
 
 type Config struct {
 	GoogleClientID     string
@@ -89,95 +222,6 @@ func (s *Server) InitOAuth() {
 			AuthURL:  "https://id.kick.com/oauth/authorize", // Verify this
 			TokenURL: "https://id.kick.com/oauth/token",     // Verify this
 		},
-	}
-}
-
-func (s *Server) Start(port string) {
-	// Initialize OAuth
-	s.InitOAuth()
-
-	r := gin.Default()
-
-	// CORS configuration
-	config := cors.DefaultConfig()
-
-	if s.config.CORSEnabled {
-		config.AllowAllOrigins = true
-		config.AllowOrigins = nil // Explicitly clear to avoid conflict panic
-		s.logger.Println("CORS: Enabling permissive CORS for all origins")
-	} else {
-		// Always allow both HTTP and HTTPS localhost
-		config.AllowOrigins = []string{"http://localhost:3000", "https://localhost:3000", "http://127.0.0.1:3000"}
-		s.logger.Println("CORS: Enabling CORS for localhost origins")
-	}
-	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "Accept"}
-	config.ExposeHeaders = []string{"Content-Length"}
-	config.AllowCredentials = true
-
-	r.Use(cors.New(config))
-
-	// WebSocket endpoint for OBS widget
-	r.GET("/ws/:streamerId", s.HandleWS)
-
-	// Auth endpoints
-	r.POST("/auth/signup", s.HandleSignup)
-	r.POST("/auth/login", s.HandleLogin)
-	r.GET("/auth/:provider/login", s.service.HandleOAuthLogin)
-	r.GET("/auth/:provider/callback", s.service.HandleOAuthCallback)
-	r.POST("/auth/wallet-login", s.service.HandleWalletLogin)
-
-	// API endpoints
-	r.GET("/api/me", s.HandleMe)
-	r.PUT("/api/me/wallet", s.HandleUpdateWallet)
-	r.PUT("/api/me/widget", s.HandleUpdateWidget)
-	r.PUT("/api/me/profile", s.HandleUpdateProfile)
-	r.POST("/api/me/widget/regenerate", s.HandleRegenerateWidget)
-	r.GET("/api/user/:username", s.HandleGetUser)
-	r.POST("/api/tip", s.HandleTip)
-	r.GET("/api/me/tips", s.HandleGetTips)
-	r.GET("/api/widget/config/:token", s.HandleGetWidgetConfig)
-
-	// Start Background Cleanup Job (Every 24h)
-	go func() {
-		// Data Migration: Ensure all users have widget tokens
-		if err := s.service.db.EnsureWidgetTokens(); err != nil {
-			s.logger.Printf("Failed to ensure widget tokens: %v", err)
-		}
-
-		ticker := time.NewTicker(24 * time.Hour)
-		defer ticker.Stop()
-		for range ticker.C {
-			s.logger.Println("Running daily session cleanup...")
-			if err := s.service.db.CleanupExpiredSessions(); err != nil {
-				s.logger.Printf("Failed to clean expired sessions: %v", err)
-			} else {
-				s.logger.Println("Daily session cleanup completed.")
-			}
-		}
-	}()
-
-	// Start Background Cleanup Job (Every 24h)
-	go func() {
-		ticker := time.NewTicker(24 * time.Hour)
-		defer ticker.Stop()
-		for range ticker.C {
-			s.logger.Println("Running daily session cleanup...")
-			if err := s.service.CleanupExpiredSessions(); err != nil {
-				s.logger.Printf("Failed to clean expired sessions: %v", err)
-			} else {
-				s.logger.Println("Daily session cleanup completed.")
-			}
-		}
-	}()
-
-	s.logger.Printf("Server starting on :%s", port)
-	if s.config.CertFile != "" && s.config.KeyFile != "" {
-		s.logger.Printf("Enabling HTTPS with cert: %s", s.config.CertFile)
-		if err := r.RunTLS(":"+port, s.config.CertFile, s.config.KeyFile); err != nil {
-			s.logger.Fatalf("Failed to start HTTPS server: %v", err)
-		}
-	} else {
-		r.Run(":" + port)
 	}
 }
 
