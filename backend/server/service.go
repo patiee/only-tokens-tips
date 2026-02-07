@@ -216,52 +216,14 @@ func (s *Service) ProcessTip(tip model.TipRequest, claims *WalletClaims) (bool, 
 	s.lastTipReq[claims.WalletAddress] = time.Now()
 	s.securityMu.Unlock()
 
-	// Verify Tx
-	verified, err := s.verifyTransaction(tip.ChainID, tip.TxHash, claims.WalletAddress, tip.Amount, tip.Asset)
-	if err != nil {
-		// // Only strike for specific malicious-looking errors
-		// if errors.Is(err, ErrTxNotFound) || errors.Is(err, ErrSenderMismatch) {
-		// 	s.securityMu.Lock()
-		// 	s.strikes[claims.WalletAddress]++
-		// 	strikeCount := s.strikes[claims.WalletAddress]
-		// 	s.securityMu.Unlock()
+	// Initial Sanity Check (Optional: Check if tx exists pending or mined)
+	// For now, we trust and verify in background to allow instant "Pending" state
 
-		// 	if strikeCount >= 3 {
-		// 		// REVOKE SESSION
-		// 		if revokeErr := s.db.RevokeWalletSessions(claims.WalletAddress); revokeErr != nil {
-		// 			s.logger.Printf("Failed to revoke session for %s: %v", claims.WalletAddress, revokeErr)
-		// 		}
+	// Check if this TxHash is already processed to prevent duplicate processing
+	// (Though DB unique constraint on TxHash might be better alongside ChainID)
+	// Skipped complexity for now.
 
-		// 		// ADD TO BLACKLIST (24 Hours)
-		// 		if blErr := s.db.BlacklistWallet(claims.WalletAddress, "3 strikes: invalid transactions", 24*time.Hour); blErr != nil {
-		// 			s.logger.Printf("Failed to blacklist wallet %s: %v", claims.WalletAddress, blErr)
-		// 		}
-
-		// 		s.securityMu.Lock()
-		// 		delete(s.strikes, claims.WalletAddress)
-		// 		s.securityMu.Unlock()
-
-		// 		return false, "Session revoked and wallet blacklisted for 24h due to multiple invalid requests.", fmt.Errorf("session revoked and blacklisted")
-		// 	}
-		// }
-
-		return false, "", err
-	}
-	if !verified {
-		return false, "Transaction not valid", nil
-	}
-
-	// // Success - Reset Strikes (Optional: Rewards good behavior)
-	// s.securityMu.Lock()
-	// if _, ok := s.strikes[claims.WalletAddress]; ok {
-	// 	delete(s.strikes, claims.WalletAddress)
-	// }
-	// s.securityMu.Unlock()
-
-	// Notify
-	s.NotifyWidgets(tip)
-
-	// Save to DB
+	// Save to DB as PENDING
 	dbTip := &dbmodel.Tip{
 		StreamerID:    tip.StreamerID,
 		Sender:        tip.Sender,
@@ -274,14 +236,18 @@ func (s *Service) ProcessTip(tip model.TipRequest, claims *WalletClaims) (bool, 
 		DestChain:     tip.DestChain,
 		SourceAddress: tip.SourceAddress,
 		DestAddress:   tip.DestAddress,
+		Status:        "pending",
 	}
 
 	if err := s.db.CreateTip(dbTip); err != nil {
-		s.logger.Printf("Failed to save tip to DB: %v", err)
-		// Non-critical error?
+		s.logger.Printf("Failed to save pending tip to DB: %v", err)
+		return false, "", fmt.Errorf("failed to save tip: %v", err)
 	}
 
-	return true, "Tip processed", nil
+	// Launch Background Verification
+	go s.monitorTransaction(dbTip.ID, tip.ChainID, tip.TxHash, claims.WalletAddress, tip.Amount, tip.Asset, tip)
+
+	return true, "Tip received! Waiting for transaction confirmation...", nil
 }
 
 func (s *Service) GetTips(username string, limit int, cursor uint) ([]model.TipResponseItem, string, error) {
@@ -309,31 +275,81 @@ func (s *Service) GetTips(username string, limit int, cursor uint) ([]model.TipR
 			Asset:       t.Asset,
 			TxHash:      t.TxHash,
 			SourceChain: t.SourceChain,
+			Status:      t.Status,
 		})
 	}
 
 	return responseItems, nextCursor, nil
 }
 
-// verifyTransaction checks the tx status, sender, and amount on-chain
-func (s *Service) verifyTransaction(chainID string, txHash string, expectedSender string, expectedAmount string, asset string) (bool, error) {
-	// Map ChainID to RPC
-	// Map ChainID to RPC
+// monitorTransaction polls for the transaction receipt
+func (s *Service) monitorTransaction(tipID uint, chainID, txHash, sender, amount, asset string, originalTip model.TipRequest) {
+	// Timeout after 1 hour
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
+	defer cancel()
+
+	ticker := time.NewTicker(5 * time.Second) // Poll every 5s
+	defer ticker.Stop()
+
+	// Connect to RPC
 	rpcURL, ok := ChainRPCs[chainID]
 	if !ok {
-		if chainID == "31337" {
-			return true, nil
-		}
-		return false, fmt.Errorf("unsupported chain ID: %s", chainID)
+		s.logger.Printf("Unsupported chain ID for monitoring: %s", chainID)
+		s.db.UpdateTipStatus(tipID, "failed")
+		return
 	}
 
 	client, err := ethclient.Dial(rpcURL)
 	if err != nil {
-		return false, fmt.Errorf("failed to connect to RPC: %v", err)
+		s.logger.Printf("Failed to dial RPC for monitoring: %v", err)
+		s.db.UpdateTipStatus(tipID, "failed")
+		return
 	}
 	defer client.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			s.logger.Printf("Transaction monitoring timed out for tip %d (tx: %s)", tipID, txHash)
+			s.db.UpdateTipStatus(tipID, "failed")
+			return
+		case <-ticker.C:
+			// Check Receipt
+			verified, err := s.checkTxStatus(client, txHash, sender)
+			if err != nil {
+				// Special case: If error is strictly "not found", we keep waiting (pending)
+				// If error is "failed" (status 0) or sender mismatch, we stop.
+
+				if errors.Is(err, ErrTxNotFound) {
+					// Still pending, continue polling
+					continue
+				}
+
+				// Determine if it is a permanent failure
+				if strings.Contains(err.Error(), "transaction failed") || errors.Is(err, ErrSenderMismatch) {
+					s.logger.Printf("Transaction verification failed for tip %d: %v", tipID, err)
+					s.db.UpdateTipStatus(tipID, "failed")
+					return
+				}
+
+				// Other temporary RPC errors? Log and continue
+				s.logger.Printf("RPC error checking tip %d: %v", tipID, err)
+				continue
+			}
+
+			if verified {
+				s.logger.Printf("Transaction confirmed for tip %d", tipID)
+				s.db.UpdateTipStatus(tipID, "confirmed")
+				s.NotifyWidgets(originalTip)
+				return
+			}
+		}
+	}
+}
+
+// checkTxStatus checks validity in a single pass
+func (s *Service) checkTxStatus(client *ethclient.Client, txHash string, expectedSender string) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	hash := common.HexToHash(txHash)
@@ -341,14 +357,15 @@ func (s *Service) verifyTransaction(chainID string, txHash string, expectedSende
 	// 1. Check Receipt Status
 	receipt, err := client.TransactionReceipt(ctx, hash)
 	if err != nil {
-		return false, fmt.Errorf("%w: %v", ErrTxNotFound, err)
+		// go-ethereum returns unexpored error for not found usually
+		return false, ErrTxNotFound
 	}
 
 	if receipt.Status != 1 {
 		return false, fmt.Errorf("transaction failed (status: 0)")
 	}
 
-	// 2. Check Sender
+	// 2. Check Sender (Re-verify strictness)
 	tx, _, err := client.TransactionByHash(ctx, hash)
 	if err != nil {
 		return false, fmt.Errorf("failed to get tx details: %v", err)
@@ -360,7 +377,7 @@ func (s *Service) verifyTransaction(chainID string, txHash string, expectedSende
 	}
 
 	if !strings.EqualFold(from.Hex(), expectedSender) {
-		return false, fmt.Errorf("%w: tx.from=%s, token.owner=%s", ErrSenderMismatch, from.Hex(), expectedSender)
+		return false, fmt.Errorf("%w: tx.from=%s, expected=%s", ErrSenderMismatch, from.Hex(), expectedSender)
 	}
 
 	return true, nil

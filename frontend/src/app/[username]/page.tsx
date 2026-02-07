@@ -84,7 +84,7 @@ export default function TipPage() {
     const handleSuccess = useCallback((data: any) => {
         // Map LifiTip data to backend params (rename senderName -> sender, include token)
         notifyBackend({ ...data, sender: data.senderName, token: data.token });
-        setStatus("Success! Tip sent.");
+        setStatus("Tip submitted! Waiting for confirmation...");
     }, [notifyBackend]);
 
     if (!user) {

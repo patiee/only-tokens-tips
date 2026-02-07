@@ -262,3 +262,7 @@ func (d *Database) RefreshWidgetToken(userID uint) (string, error) {
 	}
 	return newToken, nil
 }
+
+func (d *Database) UpdateTipStatus(tipID uint, status string) error {
+	return d.conn.Model(&model.Tip{}).Where("id = ?", tipID).Update("status", status).Error
+}

@@ -15,6 +15,7 @@ type TipResponseItem struct {
 	Asset       string `json:"asset"`
 	TxHash      string `json:"tx_hash"`
 	SourceChain string `json:"source_chain"`
+	Status      string `json:"status"`
 }
 
 type TipNotification struct {
