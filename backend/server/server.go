@@ -298,6 +298,7 @@ func (s *Server) HandleMe(c *gin.Context) {
 		"connected_providers":     connectedProviders,
 		"eth_address":             user.EthAddress,
 		"widget_tts":              user.WidgetTTS,
+		"widget_token":            user.WidgetToken,
 		"widget_bg_color":         user.WidgetBgColor,
 		"widget_user_color":       user.WidgetUserColor,
 		"widget_amount_color":     user.WidgetAmountColor,
