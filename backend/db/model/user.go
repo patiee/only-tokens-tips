@@ -10,7 +10,7 @@ type User struct {
 	Provider           string    `json:"provider"`                       // twitch, kick, google
 	ProviderID         string    `gorm:"uniqueIndex" json:"provider_id"` // Unique ID from provider
 	AvatarURL          string    `json:"avatar_url"`
-	EthAddress         string    `json:"eth_address"`
+	WalletAddress      string    `json:"wallet_address" gorm:"column:eth_address"`
 	MainWallet         bool      `json:"main_wallet"`
 	WidgetToken        string    `json:"widget_token" gorm:"uniqueIndex"` // Private UUID for widget URL
 	WidgetTTS          bool      `json:"widget_tts" gorm:"default:false"`

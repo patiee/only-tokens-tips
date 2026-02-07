@@ -491,7 +491,7 @@ function WalletConnectStep({ formData, onBack, onError, onOpenEVM, onOpenSolana,
                     body: JSON.stringify({
                         signup_token: formData.signup_token,
                         username: formData.username,
-                        eth_address: finalAddress,
+                        wallet_address: finalAddress,
                         main_wallet: true,
                         preferred_chain_id: selectedChainId,
                         preferred_asset_address: selectedAsset?.address || ""

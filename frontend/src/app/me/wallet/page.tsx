@@ -17,8 +17,7 @@ import { Token } from "@/hooks/useTokenList";
 
 export type UserProfile = {
     username: string;
-    eth_address: string;
-    main_wallet: boolean;
+    wallet_address: string;
     name?: string;
     avatar?: string;
     preferred_chain_id?: number;
@@ -93,7 +92,7 @@ function WalletsContent() {
         const token = localStorage.getItem("user_token");
         if (!token) return;
 
-        let addressToSave = profile?.eth_address || "";
+        let addressToSave = profile?.wallet_address || "";
 
         // Logic to determine new address to save based on selected chain family
         if (selectedChain?.family === ChainFamily.SOLANA) {
@@ -122,7 +121,7 @@ function WalletsContent() {
                     "Authorization": `Bearer ${token}`
                 },
                 body: JSON.stringify({
-                    eth_address: addressToSave,
+                    wallet_address: addressToSave,
                     preferred_chain_id: selectedChainId,
                     preferred_asset_address: selectedAsset?.address || "0x0000000000000000000000000000000000000000"
                 })
@@ -144,7 +143,7 @@ function WalletsContent() {
             // Success
             setProfile(prev => prev ? {
                 ...prev,
-                eth_address: addressToSave,
+                wallet_address: addressToSave,
                 preferred_chain_id: selectedChainId,
                 preferred_asset_address: selectedAsset?.address
             } : null);
@@ -190,7 +189,7 @@ function WalletsContent() {
     }
 
     // Check if wallet matches profile
-    const isDifferent = profile && currentAddress && profile.eth_address.toLowerCase() !== currentAddress.toLowerCase();
+    const isDifferent = profile && currentAddress && profile.wallet_address.toLowerCase() !== currentAddress.toLowerCase();
 
     // Check if preferences changed (dirty state)
     const prefsChanged = profile && (profile.preferred_chain_id !== selectedChainId || profile.preferred_asset_address?.toLowerCase() !== selectedAsset?.address.toLowerCase());
@@ -205,7 +204,7 @@ function WalletsContent() {
     // Allow saving if:
     // 1. Wallets match (connected and verified)
     // 2. OR: We are NOT connected, but the currently saved address is valid for the target chain (e.g. switching EVM chains), AND we are not trying to change the address itself.
-    const savedAddressCompatible = profile?.eth_address && selectedChain && isValidAddress(profile.eth_address, selectedChain.family);
+    const savedAddressCompatible = profile?.wallet_address && selectedChain && isValidAddress(profile.wallet_address, selectedChain.family);
 
     // We can save if:
     // - There is a difference to save (address or prefs)
@@ -254,11 +253,11 @@ function WalletsContent() {
 
                     <div>
                         <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-4">Saved Wallet Address</h3>
-                        {profile?.eth_address ? (
+                        {profile?.wallet_address ? (
                             <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 mb-6 flex items-center justify-between">
                                 <div className="flex flex-col">
                                     <span className="text-xs text-zinc-500 mb-1">Current Saved Address</span>
-                                    <span className="font-mono text-sm text-white break-all">{profile.eth_address}</span>
+                                    <span className="font-mono text-sm text-white break-all">{profile.wallet_address}</span>
                                 </div>
                                 <div className="h-8 w-8 rounded-full bg-green-500/10 flex items-center justify-center">
                                     <CheckCircle size={16} className="text-green-500" />

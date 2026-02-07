@@ -7,8 +7,8 @@ import Link from "next/link";
 
 export type UserProfile = {
     username: string;
-    eth_address: string;
-    main_wallet: boolean;
+    wallet_address: string;
+
     name?: string;
     avatar_url?: string;
     widget_token?: string;
@@ -258,13 +258,9 @@ function DashboardContent() {
                             </div>
                             <div className="bg-zinc-950 rounded-xl p-4 border border-zinc-800 flex items-center justify-between group cursor-pointer hover:border-zinc-700 transition-colors">
                                 <div className="font-mono text-sm text-zinc-300 truncate pr-4">
-                                    {profile.eth_address}
+                                    {profile.wallet_address}
                                 </div>
-                                {profile.main_wallet && (
-                                    <span className="px-2 py-0.5 bg-blue-900/30 text-blue-400 text-[10px] rounded border border-blue-800 uppercase font-bold tracking-wider">
-                                        Main
-                                    </span>
-                                )}
+
                             </div>
                         </div>
                     </div>

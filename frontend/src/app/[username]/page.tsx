@@ -12,10 +12,14 @@ import Link from "next/link";
 interface PublicUserProfile {
     id: number;
     username: string;
-    eth_address: string;
+    wallet_address: string;
     avatar_url: string;
     preferred_chain_id?: number;
     preferred_asset_address?: string;
+    description?: string;
+    background_url?: string;
+    provider?: string;
+    connected_providers?: string[];
 }
 
 export default function TipPage() {
@@ -92,9 +96,9 @@ export default function TipPage() {
     return (
         <div className="min-h-screen bg-black text-white font-sans selection:bg-purple-500/30">
             {/* Header / Nav */}
-            <div className="fixed top-0 left-0 right-0 z-50 bg-black/50 backdrop-blur-xl border-b border-white/5">
-                <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-between">
-                    <Link href="/" className="font-black text-xl tracking-tighter bg-clip-text text-transparent bg-gradient-to-tr from-white to-zinc-400 hover:opacity-80 transition-opacity">
+            <div className="fixed top-0 left-0 right-0 z-50 bg-black/50 backdrop-blur-xl border-b border-white/5 transition-all duration-300">
+                <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+                    <Link href="/" className="font-black text-xl tracking-tighter bg-clip-text text-transparent bg-gradient-to-tr from-white to-zinc-400 hover:opacity-80 transition-opacity flex items-center gap-2">
                         Stream Tips
                     </Link>
                     <div className="font-bold text-sm tracking-wider uppercase text-zinc-500">
@@ -104,40 +108,99 @@ export default function TipPage() {
                 </div>
             </div>
 
-            <div className="pt-24 pb-12 max-w-md mx-auto">
-                {/* Profile Header */}
-                <div className="text-center space-y-4 px-6 mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="relative inline-block">
-                        <div className="w-24 h-24 mx-auto rounded-full bg-gradient-to-tr from-purple-500 to-blue-500 p-[2px] shadow-2xl shadow-purple-500/20">
-                            <div className="w-full h-full rounded-full overflow-hidden bg-black">
-                                <img
-                                    src={user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`}
-                                    alt={user.username}
-                                    className="w-full h-full object-cover"
-                                />
+            {/* Hero / Banner */}
+            <div className="relative h-64 md:h-80 w-full overflow-hidden">
+                {user.background_url ? (
+                    <img src={user.background_url} alt="Banner" className="w-full h-full object-cover opacity-80" />
+                ) : (
+                    <div className="w-full h-full bg-gradient-to-b from-purple-900/40 via-black to-black relative">
+                        {/* Generative Pattern Fallback */}
+                        <div className="absolute inset-0 opacity-30" style={{
+                            backgroundImage: "radial-gradient(circle at center, #6366f1 1px, transparent 1px)",
+                            backgroundSize: "24px 24px"
+                        }} />
+                    </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent" />
+            </div>
+
+            <div className="max-w-4xl mx-auto px-4 relative -mt-24 z-10 pb-20">
+                <div className="flex flex-col md:flex-row items-start gap-8">
+                    {/* Simplified Content - Left Column (Profile) */}
+                    <div className="flex-1 w-full bg-zinc-900/50 backdrop-blur-md border border-white/5 rounded-3xl p-8 shadow-2xl animate-in slide-in-from-bottom-8 duration-700">
+
+                        <div className="flex flex-col items-center md:items-start gap-6 mb-8 text-center md:text-left">
+                            <div className="relative">
+                                <div className="w-32 h-32 rounded-full p-1 bg-gradient-to-tr from-purple-500 via-blue-500 to-purple-500 shadow-xl shadow-purple-500/20">
+                                    <div className="w-full h-full rounded-full overflow-hidden bg-black border-4 border-black">
+                                        <img
+                                            src={user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`}
+                                            alt={user.username}
+                                            className="w-full h-full object-cover bg-zinc-800"
+                                        />
+                                    </div>
+                                </div>
+                                {user.provider && (
+                                    <div className="absolute bottom-1 right-1 bg-black rounded-full p-1 border border-zinc-800" title={`Verified on ${user.provider}`}>
+                                        {user.provider === 'twitch' && <div className="w-6 h-6 bg-[#9146FF] rounded-full flex items-center justify-center text-white text-[10px] font-bold">Tw</div>}
+                                        {user.provider === 'kick' && <div className="w-6 h-6 bg-[#53FC18] rounded-full flex items-center justify-center text-black text-[10px] font-bold">K</div>}
+                                        {user.provider === 'google' && <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center text-black text-[10px] font-bold">G</div>}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <h1 className="text-3xl font-black text-white tracking-tight">{user.username}</h1>
+
+                                {user.description && (
+                                    <p className="text-zinc-400 text-sm md:text-base leading-relaxed max-w-md">
+                                        {user.description}
+                                    </p>
+                                )}
+
+                                {/* Social Links / Connected Providers */}
+                                {user.connected_providers && user.connected_providers.length > 0 && (
+                                    <div className="flex items-center justify-center md:justify-start gap-3 mt-4">
+                                        {user.connected_providers.includes('twitch') && (
+                                            <div className="px-3 py-1 bg-[#9146FF]/10 text-[#9146FF] border border-[#9146FF]/20 rounded-full text-xs font-bold flex items-center gap-1">
+                                                Twitch Verified
+                                            </div>
+                                        )}
+                                        {user.connected_providers.includes('kick') && (
+                                            <div className="px-3 py-1 bg-[#53FC18]/10 text-[#53FC18] border border-[#53FC18]/20 rounded-full text-xs font-bold flex items-center gap-1">
+                                                Kick Verified
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
+                        <div className="w-full h-px bg-white/5 mb-8" />
+
+                        <div className="space-y-2 mb-4">
+                            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                                <span className="w-1 h-4 bg-purple-500 rounded-full" />
+                                Send a Tip
+                            </h2>
+                            <p className="text-sm text-zinc-500">
+                                Crypto tip will be sent directly to {user.username} wallet. The message will appear on stream!
+                            </p>
+                        </div>
+
+                        <ErrorBoundary>
+                            <LifiTip
+                                recipientAddress={user.wallet_address}
+                                onSuccess={handleSuccess}
+                                onStatus={setStatus}
+                                preferredChainId={user.preferred_chain_id}
+                                preferredAssetAddress={user.preferred_asset_address}
+                            />
+                        </ErrorBoundary>
                     </div>
 
-                    <div>
-                        <h1 className="text-2xl font-bold text-white tracking-tight">{user.username}</h1>
-                    </div>
-
-
-                </div>
-
-                {/* Simplified Content - LiFi Only */}
-                <div className="p-6">
-                    <ErrorBoundary>
-                        <LifiTip
-                            recipientAddress={user.eth_address}
-                            onSuccess={handleSuccess}
-                            onStatus={setStatus}
-                            preferredChainId={user.preferred_chain_id}
-                            preferredAssetAddress={user.preferred_asset_address}
-                        />
-                    </ErrorBoundary>
+                    {/* Right Column (Future features: Leaderboard, recent tips, etc.) */}
+                    {/* For now, just a small "How it works" or similar could go here or we keep it single column centered */}
                 </div>
             </div>
         </div>

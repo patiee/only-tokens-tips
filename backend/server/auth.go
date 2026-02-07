@@ -341,13 +341,13 @@ func (s *Service) HandleWalletLogin(c *gin.Context) {
 	}
 
 	// 5. Check if User Exists
-	user, err := s.db.GetUserByEthAddress(req.Address)
+	user, err := s.db.GetUserByWalletAddress(req.Address)
 	if err != nil {
 		// User Not Found -> Return Signup Token
 		signupClaims := SignupClaims{
-			Provider:   "wallet",
-			ProviderID: req.Address,
-			EthAddress: req.Address,
+			Provider:      "wallet",
+			ProviderID:    req.Address,
+			WalletAddress: req.Address,
 		}
 		signupToken, err := s.GenerateSignupToken(signupClaims)
 		if err != nil {

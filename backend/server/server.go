@@ -216,9 +216,9 @@ func (s *Server) HandleSignup(c *gin.Context) {
 	// Register User
 	// Use claims data + request data (e.g. eth address might come from wallet connection in step 3)
 	// Priority: Claims EthAddress (if wallet login) > Request EthAddress (if linked later)
-	ethAddr := claims.EthAddress
-	if ethAddr == "" {
-		ethAddr = req.EthAddress
+	walletAddr := claims.WalletAddress
+	if walletAddr == "" {
+		walletAddr = req.WalletAddress
 	}
 
 	newUser, sessionToken, err := s.service.RegisterUser(
@@ -227,7 +227,7 @@ func (s *Server) HandleSignup(c *gin.Context) {
 		claims.ProviderID,
 		claims.Email,
 		claims.AvatarURL,
-		ethAddr,
+		walletAddr,
 		req.MainWallet,
 		req.PreferredChainID,
 		req.PreferredAssetAddress,
@@ -296,7 +296,7 @@ func (s *Server) HandleMe(c *gin.Context) {
 		"background_url":          user.BackgroundURL,
 		"provider":                user.Provider,
 		"connected_providers":     connectedProviders,
-		"eth_address":             user.EthAddress,
+		"wallet_address":          user.WalletAddress,
 		"widget_tts":              user.WidgetTTS,
 		"widget_token":            user.WidgetToken,
 		"widget_bg_color":         user.WidgetBgColor,
@@ -335,6 +335,7 @@ func (s *Server) HandleGetUser(c *gin.Context) {
 		"background_url":          user.BackgroundURL,
 		"provider":                user.Provider,
 		"connected_providers":     connectedProviders,
+		"wallet_address":          user.WalletAddress,
 	})
 }
 
@@ -358,17 +359,17 @@ func (s *Server) HandleUpdateWallet(c *gin.Context) {
 		return
 	}
 
-	err = s.service.UpdateUserWallet(claims.UserID, req.EthAddress, req.PreferredChainID, req.PreferredAssetAddress)
+	err = s.service.UpdateUserWallet(claims.UserID, req.WalletAddress, req.PreferredChainID, req.PreferredAssetAddress)
 	if err != nil {
 		s.logger.Printf("Failed to update wallet: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update wallet"})
 		return
 	}
 
-	s.logger.Printf("User %s updated wallet to %s (Chain: %d, Asset: %s)", claims.Username, req.EthAddress, req.PreferredChainID, req.PreferredAssetAddress)
+	s.logger.Printf("User %s updated wallet to %s (Chain: %d, Asset: %s)", claims.Username, req.WalletAddress, req.PreferredChainID, req.PreferredAssetAddress)
 	c.JSON(http.StatusOK, gin.H{
 		"message":                 "Wallet updated",
-		"eth_address":             req.EthAddress,
+		"wallet_address":          req.WalletAddress,
 		"preferred_chain_id":      req.PreferredChainID,
 		"preferred_asset_address": req.PreferredAssetAddress,
 	})
@@ -601,7 +602,7 @@ func (s *Server) HandleGetWidgetConfig(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"username":                user.Username,
-		"eth_address":             user.EthAddress,
+		"wallet_address":          user.WalletAddress,
 		"widget_tts":              user.WidgetTTS,
 		"widget_bg_color":         user.WidgetBgColor,
 		"widget_user_color":       user.WidgetUserColor,

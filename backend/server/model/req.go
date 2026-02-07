@@ -17,7 +17,7 @@ type TipRequest struct {
 type SignupRequest struct {
 	Username              string `json:"username"`
 	SignupToken           string `json:"signup_token"`
-	EthAddress            string `json:"eth_address"`
+	WalletAddress         string `json:"wallet_address"`
 	MainWallet            bool   `json:"main_wallet"`
 	PreferredChainID      int    `json:"preferred_chain_id"`
 	PreferredAssetAddress string `json:"preferred_asset_address"`
@@ -32,7 +32,7 @@ type UpdateWidgetRequest struct {
 }
 
 type UpdateWalletRequest struct {
-	EthAddress            string `json:"eth_address" binding:"required"`
+	WalletAddress         string `json:"wallet_address" binding:"required"`
 	PreferredChainID      int    `json:"preferred_chain_id"`
 	PreferredAssetAddress string `json:"preferred_asset_address"`
 }

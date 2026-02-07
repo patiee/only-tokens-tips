@@ -165,11 +165,11 @@ func (s *Service) ValidateWalletToken(tokenString string) (*WalletClaims, error)
 // Signup Token Logic
 
 type SignupClaims struct {
-	Provider   string `json:"provider"`
-	ProviderID string `json:"provider_id"`
-	Email      string `json:"email,omitempty"`
-	AvatarURL  string `json:"avatar_url,omitempty"`
-	EthAddress string `json:"eth_address,omitempty"`
+	Provider      string `json:"provider"`
+	ProviderID    string `json:"provider_id"`
+	Email         string `json:"email,omitempty"`
+	AvatarURL     string `json:"avatar_url,omitempty"`
+	WalletAddress string `json:"wallet_address,omitempty"`
 	jwt.RegisteredClaims
 }
 

@@ -112,7 +112,7 @@ func (s *Service) CheckUsernameTaken(username string, userID uint) bool {
 	return s.db.CheckUsernameTaken(username, userID)
 }
 
-func (s *Service) CompleteUserProfile(userID uint, username, ethAddress string, mainWallet bool) (*dbmodel.User, string, error) {
+func (s *Service) CompleteUserProfile(userID uint, username, walletAddress string, mainWallet bool) (*dbmodel.User, string, error) {
 	// Preserve existing description/bg/avatar? Or assume they are empty/unchanged?
 	// For "CompleteUserProfile" usually used in signup/onboarding, so we might not have description yet.
 	// But to be safe, we should probably fetch the user first if we want to preserve fields, OR check if we can pass zero values to ignore?
@@ -121,7 +121,7 @@ func (s *Service) CompleteUserProfile(userID uint, username, ethAddress string, 
 	// user, err := s.db.GetUserByUsername(username)
 
 	// Update DB
-	err := s.db.UpdateUserProfile(userID, username, "", "", "", ethAddress, mainWallet)
+	err := s.db.UpdateUserProfile(userID, username, "", "", "", walletAddress, mainWallet)
 	if err != nil {
 		return nil, "", err
 	}
@@ -154,25 +154,25 @@ func (s *Service) UpdateProfile(userID uint, req model.UpdateProfileRequest) err
 	user.AvatarURL = req.AvatarURL
 
 	// Use the DB method
-	return s.db.UpdateUserProfile(userID, user.Username, user.Description, user.BackgroundURL, user.AvatarURL, user.EthAddress, user.MainWallet)
+	return s.db.UpdateUserProfile(userID, user.Username, user.Description, user.BackgroundURL, user.AvatarURL, user.WalletAddress, user.MainWallet)
 }
 
 func (s *Service) GetUserByUsername(username string) (*dbmodel.User, error) {
 	return s.db.GetUserByUsername(username)
 }
 
-func (s *Service) UpdateUserWallet(userID uint, ethAddress string, chainID int, assetAddress string) error {
-	return s.db.UpdateUserWallet(userID, ethAddress, chainID, assetAddress)
+func (s *Service) UpdateUserWallet(userID uint, walletAddress string, chainID int, assetAddress string) error {
+	return s.db.UpdateUserWallet(userID, walletAddress, chainID, assetAddress)
 }
 
-func (s *Service) RegisterUser(username, provider, providerID, email, avatar, ethAddress string, mainWallet bool, preferredChainID int, preferredAssetAddress string) (*dbmodel.User, string, error) {
+func (s *Service) RegisterUser(username, provider, providerID, email, avatar, walletAddress string, mainWallet bool, preferredChainID int, preferredAssetAddress string) (*dbmodel.User, string, error) {
 	user := &dbmodel.User{
 		Username:         username,
 		Provider:         provider,
 		ProviderID:       providerID,
 		Email:            email,
 		AvatarURL:        avatar,
-		EthAddress:       ethAddress,
+		WalletAddress:    walletAddress,
 		MainWallet:       mainWallet,
 		CreatedAt:        time.Now(),
 		PreferredChainID: preferredChainID,

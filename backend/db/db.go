@@ -97,7 +97,7 @@ func (d *Database) CreateUser(user *model.User) error {
 	return d.conn.Create(user).Error
 }
 
-func (d *Database) GetUserByEthAddress(address string) (*model.User, error) {
+func (d *Database) GetUserByWalletAddress(address string) (*model.User, error) {
 	var user model.User
 	if err := d.conn.Where("eth_address = ?", address).First(&user).Error; err != nil {
 		return nil, err
@@ -113,22 +113,22 @@ func (d *Database) GetUserByWidgetToken(token string) (*model.User, error) {
 	return &user, nil
 }
 
-func (d *Database) UpdateUserWallet(userID uint, ethAddress string, chainID int, assetAddress string) error {
+func (d *Database) UpdateUserWallet(userID uint, walletAddress string, chainID int, assetAddress string) error {
 	updates := map[string]interface{}{
-		"eth_address":        ethAddress,
+		"eth_address":        walletAddress,
 		"preferred_chain_id": chainID,
 		"preferred_asset":    assetAddress,
 	}
 	return d.conn.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
 }
 
-func (d *Database) UpdateUserProfile(userID uint, username, description, backgroundURL, avatarURL, ethAddress string, mainWallet bool) error {
+func (d *Database) UpdateUserProfile(userID uint, username, description, backgroundURL, avatarURL, walletAddress string, mainWallet bool) error {
 	updates := map[string]interface{}{
 		"username":       username,
 		"description":    description,
 		"background_url": backgroundURL,
 		"avatar_url":     avatarURL,
-		"eth_address":    ethAddress,
+		"eth_address":    walletAddress,
 		"main_wallet":    mainWallet,
 	}
 	return d.conn.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
