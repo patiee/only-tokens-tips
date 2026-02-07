@@ -121,8 +121,11 @@ export function WalletNetworkSelector({
     // Ensure valid selection
     useEffect(() => {
         if (tokens.length > 0) {
-            // Check if current selected asset is valid for this list
-            const isCurrentValid = selectedAsset && tokens.some(t => t.address.toLowerCase() === selectedAsset.address.toLowerCase());
+            // Check if current selected asset is valid for this list (Address + Symbol check to avoid collisions like 0x00...00 for ETH/BTC)
+            const isCurrentValid = selectedAsset && tokens.some(t =>
+                t.address.toLowerCase() === selectedAsset.address.toLowerCase() &&
+                t.symbol === selectedAsset.symbol
+            );
 
             if (!isCurrentValid && !customToken) {
                 // Try preference
