@@ -184,6 +184,8 @@ func (s *Service) NotifyWidgets(tip *dbmodel.Tip) {
 		AvatarURL:  tip.AvatarURL,
 	}
 
+	s.logger.Printf("Broadcasting notification to %s: %+v", tip.StreamerID, notification)
+
 	s.clientsMu.Lock()
 	defer s.clientsMu.Unlock()
 
@@ -755,3 +757,16 @@ func (s *Service) IsWalletBlacklisted(address string) bool {
 func (s *Service) CleanupExpiredSessions() error {
 	return s.db.CleanupExpiredSessions()
 }
+
+// func (s *Service) SendTestTip(streamerID, sender, message, amount, avatarURL string) error {
+// 	tip := &dbmodel.Tip{
+// 		StreamerID: streamerID,
+// 		Sender:     sender,
+// 		Message:    message,
+// 		Amount:     amount,
+// 		AvatarURL:  avatarURL,
+// 		Status:     "confirmed",
+// 	}
+// 	s.NotifyWidgets(tip)
+// 	return nil
+// }

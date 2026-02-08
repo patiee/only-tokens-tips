@@ -13,6 +13,7 @@ type Tip = {
     asset: string;
     language?: string;
     actionText?: string;
+    avatarUrl?: string; // Added for ENS/Custom Avatars
 };
 
 export default function WidgetPage() {
@@ -59,14 +60,19 @@ export default function WidgetPage() {
     // WebSocket Connection - Ingests into Queue
     useEffect(() => {
         const wsUrl = (process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080').replace("http", "ws") + `/ws/${token}`;
-        let socket: WebSocket;
+        let socket: WebSocket | null = null;
+        let retryTimeout: NodeJS.Timeout;
+        let isMounted = true;
 
         const connect = () => {
+            if (!isMounted) return;
+
+            console.log("Connecting to WS...", wsUrl);
             socket = new WebSocket(wsUrl);
 
             socket.onopen = () => {
                 console.log("Widget connected to WS");
-                setConnected(true);
+                if (isMounted) setConnected(true);
             };
 
             socket.onmessage = (event) => {
@@ -77,8 +83,9 @@ export default function WidgetPage() {
                             sender: data.sender || "Anonymous",
                             amount: data.amount || "0",
                             message: data.message || "",
-                            asset: data.asset || "ETH", // Dynamic asset from server
-                            language: 'en' // default
+                            asset: data.asset || "ETH",
+                            avatarUrl: data.avatarUrl || data.avatar_url, // Support both cases
+                            language: 'en'
                         };
 
                         // Detect Language IMMEDIATELY upon receipt
@@ -132,8 +139,10 @@ export default function WidgetPage() {
                             newTip.actionText = tippedMap[newTip.language] || 'tipped';
                         }
 
-                        console.log("Added tip to queue:", newTip);
-                        setQueue(prev => [...prev, newTip]);
+                        if (isMounted) {
+                            console.log("Added tip to queue:", newTip);
+                            setQueue(prev => [...prev, newTip]);
+                        }
                     }
                 } catch (e) {
                     console.error("WS Parse Error", e);
@@ -141,14 +150,22 @@ export default function WidgetPage() {
             };
 
             socket.onclose = () => {
-                console.log("WS Disconnected, retrying...");
-                setConnected(false);
-                setTimeout(connect, 3000);
+                console.log("WS Disconnected");
+                if (isMounted) {
+                    setConnected(false);
+                    // Only retry if intentional disconnect didn't happen (which sets isMounted false)
+                    retryTimeout = setTimeout(connect, 3000);
+                }
             };
         };
 
         connect();
-        return () => socket?.close();
+
+        return () => {
+            isMounted = false;
+            clearTimeout(retryTimeout);
+            socket?.close();
+        };
     }, [token]);
 
     // Queue Processor
