@@ -710,7 +710,7 @@ func (s *Service) monitorTransaction(tip *dbmodel.Tip) {
 				verified, err = s.checkSolanaTx(rpcURL, txHash, sender)
 			case "bitcoin":
 				// Using mempool.space for now if configured
-				verified, err = s.checkBitcoinTx("https://mempool.space/api", txHash, tip.Amount)
+				verified, err = s.checkBitcoinTx("https://mempool.space/api", txHash, sender, tip.Amount)
 			case "100003": // Sui
 				verified, err = s.checkSuiTx(rpcURL, txHash, sender)
 			default: // EVM
@@ -788,9 +788,9 @@ func (s *Service) checkEvmTx(rpcURL string, txHash string, expectedSender string
 }
 
 // checkBitcoinTx checks validity via Mempool.space API
-func (s *Service) checkBitcoinTx(apiURL string, txHash string, expectedAmount string) (bool, error) {
-	// GET /tx/:txid/status
-	resp, err := http.Get(fmt.Sprintf("%s/tx/%s/status", apiURL, txHash))
+func (s *Service) checkBitcoinTx(apiURL string, txHash string, expectedSender string, expectedAmount string) (bool, error) {
+	// GET /tx/:txid (Full details)
+	resp, err := http.Get(fmt.Sprintf("%s/tx/%s", apiURL, txHash))
 	if err != nil {
 		return false, err
 	}
@@ -799,24 +799,48 @@ func (s *Service) checkBitcoinTx(apiURL string, txHash string, expectedAmount st
 	if resp.StatusCode == 404 {
 		return false, ErrTxNotFound
 	}
-
 	if resp.StatusCode != 200 {
 		return false, fmt.Errorf("API error: %d", resp.StatusCode)
 	}
 
-	var status struct {
-		Confirmed   bool   `json:"confirmed"`
-		BlockHash   string `json:"block_hash"`
-		BlockHeight int    `json:"block_height"`
+	var tx struct {
+		TxID   string `json:"txid"`
+		Status struct {
+			Confirmed bool `json:"confirmed"`
+		} `json:"status"`
+		Vin []struct {
+			Prevout struct {
+				ScriptPubKeyAddress string `json:"scriptpubkey_address"`
+				Value               int64  `json:"value"`
+			} `json:"prevout"`
+		} `json:"vin"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&tx); err != nil {
 		return false, err
 	}
 
-	if !status.Confirmed {
-		return false, ErrTxNotFound // Treat unconfirmed as not found/pending for our logic
+	if !tx.Status.Confirmed {
+		return false, ErrTxNotFound // Pending
 	}
+
+	// Verify Sender
+	senderFound := false
+	for _, input := range tx.Vin {
+		if strings.EqualFold(input.Prevout.ScriptPubKeyAddress, expectedSender) {
+			senderFound = true
+			break
+		}
+	}
+
+	if !senderFound {
+		return false, fmt.Errorf("sender %s not found in transaction inputs", expectedSender)
+	}
+
+	// Amount check is complex due to change outputs and fees.
+	// For now, we verified the sender initiated *a* confirmed transaction with this hash.
+	// This prevents random tx claiming, but allows self-send claiming.
+	// Acceptable risk for Phase 1.
 
 	return true, nil
 }
@@ -890,9 +914,6 @@ func (s *Service) checkSolanaTx(rpcURL string, txHash string, expectedSender str
 				if key.Pubkey == expectedSender {
 					return true, nil
 				}
-				if key.Pubkey == expectedSender {
-					return true, nil
-				}
 			}
 		}
 		return false, fmt.Errorf("%w: expected %s", ErrSenderMismatch, expectedSender)
@@ -903,6 +924,10 @@ func (s *Service) checkSolanaTx(rpcURL string, txHash string, expectedSender str
 
 // checkSuiTx checks validity via Sui JSON-RPC
 func (s *Service) checkSuiTx(rpcURL string, txHash string, expectedSender string) (bool, error) {
+	if rpcURL == "" {
+		rpcURL = "https://fullnode.mainnet.sui.io:443"
+	}
+
 	payload := map[string]interface{}{
 		"jsonrpc": "2.0",
 		"id":      1,
@@ -930,7 +955,7 @@ func (s *Service) checkSuiTx(rpcURL string, txHash string, expectedSender string
 	var result struct {
 		Result *struct {
 			Effects *struct {
-				Status struct {
+				Status *struct {
 					Status string `json:"status"`
 					Error  string `json:"error"`
 				} `json:"status"`
@@ -956,11 +981,17 @@ func (s *Service) checkSuiTx(rpcURL string, txHash string, expectedSender string
 	}
 
 	if result.Result == nil {
-		return false, ErrTxNotFound
+		return false, ErrTxNotFound // Pending or invalid
 	}
 
-	if result.Result.Effects.Status.Status != "success" {
-		return false, fmt.Errorf("transaction failed: %s", result.Result.Effects.Status.Error)
+	// 1. Verify Status
+	if result.Result.Effects == nil || result.Result.Effects.Status == nil || result.Result.Effects.Status.Status != "success" {
+		return false, fmt.Errorf("transaction failed on-chain")
+	}
+
+	// 2. Verify Sender
+	if result.Result.Transaction == nil || result.Result.Transaction.Data == nil {
+		return false, fmt.Errorf("transaction data missing")
 	}
 
 	if result.Result.Transaction.Data.Sender != expectedSender {

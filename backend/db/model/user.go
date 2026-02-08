@@ -31,4 +31,7 @@ type User struct {
 	UseEnsBackground   bool      `json:"use_ens_background" gorm:"default:false"`
 	UseEnsDescription  bool      `json:"use_ens_description" gorm:"default:false"`
 	UseEnsUsername     bool      `json:"use_ens_username" gorm:"default:false"`
+	SolanaAddress      string    `json:"solana_address"`
+	BitcoinAddress     string    `json:"bitcoin_address"`
+	SuiAddress         string    `json:"sui_address"`
 }

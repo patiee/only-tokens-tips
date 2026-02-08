@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { getAddress, AddressPurpose } from "sats-connect";
+import { getAddress, AddressPurpose, signTransaction } from "sats-connect";
 
 // Define Types for Bitcoin Wallets
 type BitcoinWalletType = "unisat" | "xverse" | "leather" | "phantom" | "metamask" | null;
@@ -13,6 +13,7 @@ interface BitcoinWalletContextType {
     connect: (type: BitcoinWalletType) => Promise<void>;
     disconnect: () => void;
     signMessage: (message: string) => Promise<string>;
+    sendBitcoinTransaction: (psbtHex: string) => Promise<string>; // Returns TxHash
     error: string | null;
 }
 
@@ -23,6 +24,7 @@ const BitcoinWalletContext = createContext<BitcoinWalletContextType>({
     connect: async () => { },
     disconnect: () => { },
     signMessage: async () => "",
+    sendBitcoinTransaction: async () => "",
     error: null,
 });
 
@@ -37,9 +39,6 @@ export function BitcoinWalletProvider({ children }: { children: React.ReactNode 
     // Initial check (optional, persist connection)
     useEffect(() => {
         const storedType = localStorage.getItem("btc_wallet_type") as BitcoinWalletType;
-        // Ideally we verify if still connected, but for MVP we might just wait for user action
-        // or try to reconnect silently if possible.
-        // For Unisat we can check window.unisat.getAccounts()
         if (storedType === "unisat" && typeof window !== "undefined" && (window as any).unisat) {
             (window as any).unisat.getAccounts().then((accounts: string[]) => {
                 if (accounts.length > 0) {
@@ -55,7 +54,6 @@ export function BitcoinWalletProvider({ children }: { children: React.ReactNode 
         setError(null);
         if (type === "unisat") {
             if (typeof window === "undefined" || !(window as any).unisat) {
-                // Check if likely mobile or just not installed
                 setError("Unisat wallet not detected.");
                 window.open("https://unisat.io", "_blank");
                 return;
@@ -76,14 +74,8 @@ export function BitcoinWalletProvider({ children }: { children: React.ReactNode 
             if (provider && provider.isPhantom) {
                 try {
                     const accounts = await provider.requestAccounts();
-                    // Phantom usually returns array of { address, addressType, publicKey } or just strings depending on version. 
-                    // Current standard docs say array of objects.
-                    // But let's check structure. Safest is to assume array of objects and find payment/ordinals.
-                    // Or if strings, take first.
-                    // Actually, Phantom documentation says `requestAccounts` returns `Array<Account>` where Account has `address`, `addressType`.
                     if (accounts.length > 0) {
                         const account = accounts[0];
-                        // account object likely has address property
                         setAddress(account.address || account);
                         setWalletType("phantom");
                         setIsConnected(true);
@@ -97,7 +89,6 @@ export function BitcoinWalletProvider({ children }: { children: React.ReactNode 
                 window.open("https://phantom.app/", "_blank");
             }
         } else if (type === "xverse" || type === "leather") {
-            // Xverse and Leather use sats-connect
             try {
                 const getAddressOptions = {
                     payload: {
@@ -108,17 +99,8 @@ export function BitcoinWalletProvider({ children }: { children: React.ReactNode 
                         },
                     },
                     onFinish: (response: any) => {
-                        // Xverse returns multiple addresses. usually we want the taproot (ordinals) or payment?
-                        // Let's grab the ordinals (Taproot) one as it's modern, or payment if preferred.
-                        // User prompt says "wallet connection", usually payment address is safer for general tips?
-                        // Let's use Ordinals (Taproot) as it's common for token apps, but Payment (Segwit) is standard.
-                        // Let's find the one with purpose 'payment' (starts with 3 or bc1q) or 'ordinals' (bc1p)
                         const paymentAddress = response.addresses.find((addr: any) => addr.purpose === AddressPurpose.Payment)?.address;
                         const ordinalsAddress = response.addresses.find((addr: any) => addr.purpose === AddressPurpose.Ordinals)?.address;
-
-                        // Prefer payment for "tips" (usually BTC), but if it's tokens (BRC20) we need ordinals.
-                        // User app is "only-tokens-tips", implies potentially tokens.
-                        // Let's use Ordinals address if available, else payment.
                         setAddress(ordinalsAddress || paymentAddress);
                         setWalletType(type);
                         setIsConnected(true);
@@ -155,34 +137,106 @@ export function BitcoinWalletProvider({ children }: { children: React.ReactNode 
             if (provider) {
                 const encodedMessage = new TextEncoder().encode(message);
                 const signed = await provider.signMessage(encodedMessage);
-                // signed is object with signature (Uint8Array)
-                // Convert to hex or base64? Backend usually expects base64 for BTC or hex? 
-                // Unisat returns base64 string usually.
-                // Let's return base64 for consistency if possible, or handle on backend.
-                // For now, let's create a buffer/array convert.
                 return Buffer.from(signed.signature).toString("base64");
             }
         }
 
-        // For Xverse/Leather (sats-connect)
-        // We need to dynamically import or use the imported function if I add it.
-        // If I haven't imported `signMessage` from sats-connect, strict TS might complain if I try to use it?
-        // But `sats-connect` is a library.
-        // Assuming I will add the import:
         if (walletType === "xverse" || walletType === "leather") {
-            return new Promise((resolve, reject) => {
-                // We need to import signMessage. Since I can't easily add it here without breaking context, 
-                // I'll assume users use Unisat or Phantom for now, or I'll implement it shortly.
-                // Actually, let's throw for now or try to use a global if available (unlikely).
-                reject(new Error("Signing not implemented for " + walletType + " yet."));
-            });
+            // Not directly supported easily without checking docs for message signing in sats-connect
+            // For now simpler to throw
+            throw new Error("Message signing not supported for " + walletType + " yet.");
         }
 
         throw new Error("Signing not supported for this wallet type");
     }, [walletType, address]);
 
+    const sendBitcoinTransaction = useCallback(async (psbtHex: string): Promise<string> => {
+        if (!walletType || !address) throw new Error("Wallet not connected");
+
+        // 1. UNISAT
+        if (walletType === "unisat") {
+            try {
+                // Sign
+                const signedPsbt = await (window as any).unisat.signPsbt(psbtHex);
+                // Broadcast
+                const txHash = await (window as any).unisat.pushPsbt(signedPsbt);
+                return txHash;
+            } catch (e: any) {
+                throw new Error("Unisat Failed: " + (e.message || e));
+            }
+        }
+
+        // 2. PHANTOM
+        if (walletType === "phantom") {
+            const provider = (window as any).phantom?.bitcoin;
+            if (provider) {
+                try {
+                    // Phantom signAndSendTransaction usually expects PSBT in specific format?
+                    // documentation: signTransaction returns signed PSBT.
+                    // Let's try to sign and then we need to push.
+                    // Does Phantom have push?
+                    // provider.signTransaction(psbtBase64).
+                    // Convert hex to base64
+                    const psbtBuffer = Buffer.from(psbtHex, 'hex');
+                    const psbtBase64 = psbtBuffer.toString('base64');
+
+                    // Phantom 
+                    const signedTransaction = await provider.signTransaction(psbtBase64);
+                    // This returns signed PSBT. We need to broadcast.
+                    // We can use a public mempool API to push?
+                    // NOTE: This is a limitation. 
+                    // Let's throw for now or assume user can use Unisat.
+                    throw new Error("Phantom signing implemented but broadcast missing. Use Unisat.");
+                } catch (e: any) {
+                    throw new Error("Phantom Failed: " + (e.message || e));
+                }
+            }
+        }
+
+        // 3. XVERSE / LEATHER (sats-connect)
+        if (walletType === "xverse" || walletType === "leather") {
+            return new Promise((resolve, reject) => {
+                const psbtBase64 = Buffer.from(psbtHex, 'hex').toString('base64');
+                const signOptions = {
+                    payload: {
+                        network: {
+                            type: "Mainnet",
+                        },
+                        message: "Sign Transaction",
+                        psbtBase64: psbtBase64,
+                        broadcast: true,
+                        inputsToSign: [
+                            {
+                                address: address,
+                                signingIndexes: [0], // Optimistic assumption: input 0 is ours? 
+                                // Li.Fi usually constructs inputs. We might need to map them.
+                                // If providing all inputs, we need to know which ones match our address.
+                                // For tip, usually valid.
+                                // If we don't specify inputsToSign, does it sign all?
+                            }
+                        ],
+                    },
+                    onFinish: (response: any) => {
+                        resolve(response.txId);
+                    },
+                    onCancel: () => reject(new Error("User Canceled")),
+                };
+
+                // We need to be careful about inputsToSign.
+                // If we don't know the inputs, Xverse might fail.
+                // Let's try passing empty array and see if it auto-detects or fails.
+                // Actually, sats-connect usually requires inputsToSign.
+                reject(new Error("Xverse signing requires input mapping which is complex. Please use Unisat."));
+                // signTransaction(signOptions);
+            });
+        }
+
+        throw new Error("Wallet provider not supported for transactions");
+
+    }, [walletType, address]);
+
     return (
-        <BitcoinWalletContext.Provider value={{ isConnected, address, walletType, connect, disconnect, signMessage, error }}>
+        <BitcoinWalletContext.Provider value={{ isConnected, address, walletType, connect, disconnect, signMessage, sendBitcoinTransaction, error }}>
             {children}
         </BitcoinWalletContext.Provider>
     );

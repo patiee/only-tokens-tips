@@ -5,7 +5,7 @@ import { WagmiProvider } from "wagmi";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { createNetworkConfig, SuiClientProvider, WalletProvider as SuiWalletProvider } from "@mysten/dapp-kit";
-import { getFullnodeUrl } from "@mysten/sui.js/client";
+
 
 import { config } from "@/config/wagmi";
 import { BitcoinWalletProvider } from "@/contexts/BitcoinWalletContext";
@@ -16,8 +16,8 @@ import dynamic from "next/dynamic";
 const SolanaProvider = dynamic(() => import("@/providers/SolanaProvider"), { ssr: false });
 
 const networkConfig = {
-    mainnet: { url: getFullnodeUrl("mainnet"), network: "mainnet" as const },
-    testnet: { url: getFullnodeUrl("testnet"), network: "testnet" as const },
+    mainnet: { url: "https://fullnode.mainnet.sui.io", network: "mainnet" as const },
+    testnet: { url: "https://fullnode.testnet.sui.io", network: "testnet" as const },
 };
 
 export function Providers({ children }: { children: React.ReactNode }) {

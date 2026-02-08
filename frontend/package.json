@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@mysten/dapp-kit": "^1.0.1",
-    "@mysten/sui.js": "^0.54.1",
+    "@mysten/sui": "^2.3.1",
     "@radix-ui/themes": "^3.2.1",
     "@solana/wallet-adapter-base": "^0.9.27",
     "@solana/wallet-adapter-react": "^0.15.39",

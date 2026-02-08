@@ -10,9 +10,11 @@ import { WalletNetworkSelector } from "./WalletNetworkSelector";
 import { WalletConnectButton } from "./WalletConnectButton";
 import { WalletConnectionModals } from "./WalletConnectionModals";
 import { Token } from "@/hooks/useTokenList";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { useBitcoinWallet } from "@/contexts/BitcoinWalletContext";
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { Transaction } from "@mysten/sui/transactions";
+import { VersionedTransaction } from "@solana/web3.js";
 import { TipWidget } from "./TipWidget";
 
 // Constants
@@ -61,9 +63,11 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
     const { authenticate } = useWalletAuth();
 
     // Multi-Chain Hooks
-    const { publicKey: solanaPublicKey, connected: isSolanaConnected, disconnect: disconnectSolana } = useWallet();
-    const { address: btcAddress, isConnected: isBtcConnected, disconnect: disconnectBtc } = useBitcoinWallet();
+    const { connection } = useConnection();
+    const { publicKey: solanaPublicKey, connected: isSolanaConnected, disconnect: disconnectSolana, sendTransaction } = useWallet();
+    const { address: btcAddress, isConnected: isBtcConnected, disconnect: disconnectBtc, sendBitcoinTransaction } = useBitcoinWallet();
     const suiAccount = useCurrentAccount();
+    const { mutateAsync: signAndExecuteTransaction } = useSignAndExecuteTransaction();
     const isSuiConnected = !!suiAccount;
     // useDisconnectWallet for Sui? We might need to import it if we want a disconnect button.
 
@@ -188,6 +192,12 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
 
             if (selectedChain?.family === ChainFamily.EVM) {
                 await handleEVMTip(token);
+            } else if (selectedChain?.family === ChainFamily.BITCOIN) {
+                await handleBitcoinTip(token);
+            } else if (selectedChain?.family === ChainFamily.SOLANA) {
+                await handleSolanaTip(token);
+            } else if (selectedChain?.family === ChainFamily.SUI) {
+                await handleSuiTip(token);
             } else {
                 throw new Error(`${selectedChain?.family} tipping not yet fully implemented in this demo.`);
             }
@@ -198,6 +208,224 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
             setError(e.message || "Transaction failed");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleBitcoinTip = async (authToken: string) => {
+        if (!btcAddress) throw new Error("Bitcoin wallet not connected");
+        onStatus("Fetching BTC quote...");
+
+        // Destination: Base (8453) for now, similar to EVM flow.
+        const targetChainId = 8453;
+        // From: BTC, To: USDC on Base (or ETH?)
+        // Let's use USDC on Base as stable target? Or ETH?
+        // handleEVMTip used 0x0...0 (ETH) as fromToken. Use 'BTC' for fromToken.
+        // For toToken, stick to USDC or ETH. USDC is safer for value preservation? 
+        // handleEVMTip uses 0x000 (Native) as toToken. Let's use Native ETH on Base.
+        const toToken = "0x0000000000000000000000000000000000000000";
+
+        let slippageDecimal = "0.005";
+        if (slippageMode === "custom" && customSlippage) {
+            slippageDecimal = (parseFloat(customSlippage) / 100).toString();
+        }
+
+        // Amount is in BTC (e.g. 0.001). Li.Fi expects?
+        // Li.Fi fromAmount should be in smallest unit (Sats). 1 BTC = 10^8 Sats.
+        const satsAmount = Math.floor(parseFloat(amount) * 100000000).toString();
+
+        const params = new URLSearchParams({
+            fromChain: "BTC", // Li.Fi uses 'BTC' for Bitcoin chain ID
+            toChain: targetChainId.toString(),
+            fromToken: "BTC", // Li.Fi uses 'BTC' for native Bitcoin token
+            toToken: toToken,
+            toAddress: recipientAddress,
+            fromAmount: satsAmount,
+            fromAddress: btcAddress,
+            integrator: process.env.NEXT_PUBLIC_LIFI_INTEGRATOR || "stream-tips",
+            fee: "0.01",
+            slippage: slippageDecimal,
+        });
+
+        const apiKey = process.env.NEXT_PUBLIC_LIFI_API_KEY;
+        const headers: HeadersInit = { 'accept': 'application/json' };
+        if (apiKey) headers['x-lifi-api-key'] = apiKey;
+
+        const response = await fetch(`https://li.quest/v1/quote?${params.toString()}`, { headers });
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error("Li.Fi Quote Failed: " + (errData.message || response.statusText));
+        }
+        const quote = await response.json();
+
+        // Check for transaction request data (PSBT)
+        if (!quote.transactionRequest || !quote.transactionRequest.data) {
+            throw new Error("Invalid quote received from Li.Fi (Missing transaction data)");
+        }
+
+        const psbtHex = quote.transactionRequest.data;
+
+        onStatus("Signing Bitcoin Transaction...");
+        const txHash = await sendBitcoinTransaction(psbtHex);
+
+        if (!txHash) throw new Error("Transaction failed or cancelled");
+
+        onSuccess({
+            txHash: txHash,
+            amount: amount,
+            message: message,
+            senderName: useEnsNameFlag && ensName ? ensName : (senderName || "Anonymous"),
+            asset: "BTC",
+            sourceChain: "bitcoin",
+            destChain: "8453", // Base
+            sourceAddress: btcAddress,
+            destAddress: recipientAddress,
+            token: authToken,
+            enableEnsAvatar: useEnsNameFlag && useEnsAvatarFlag,
+            enableEnsBackground: useEnsNameFlag && useEnsBackgroundFlag,
+            enableEnsTwitter: useEnsNameFlag && useEnsTwitterFlag,
+        });
+
+        setMessage("");
+        setAmount("");
+    };
+
+    const handleSolanaTip = async (authToken: string) => {
+        if (!isSolanaConnected || !solanaPublicKey) throw new Error("Solana wallet not connected");
+        // We will need the `useWallet` hook's `signTransaction` or `sendTransaction`.
+        // The `useWallet` hook is imported as:
+        // const { publicKey: solanaPublicKey, connected: isSolanaConnected, disconnect: disconnectSolana } = useWallet();
+        // We need to destructure sendTransaction!
+        // I will add sendTransaction to destructuring in next step if missed, but let's assume it's available or use dynamic access?
+        // Actually, let me check lines 64 to see what I destructured.
+        // Line 64: const { publicKey: solanaPublicKey, connected: isSolanaConnected, disconnect: disconnectSolana } = useWallet();
+        // I need to update line 64 concurrently or separately. 
+        // I'll update line 64 in this same multi_replace call.
+
+        onStatus("Fetching SOL quote...");
+
+        // Destination: Base (8453)
+        const targetChainId = 8453;
+        const toToken = "0x0000000000000000000000000000000000000000"; // Native ETH on Base
+
+        let slippageDecimal = "0.005";
+        if (slippageMode === "custom" && customSlippage) {
+            slippageDecimal = (parseFloat(customSlippage) / 100).toString();
+        }
+
+        // Amount: SOL has 9 decimals.
+        const lamports = Math.floor(parseFloat(amount) * 1000000000).toString();
+
+        const params = new URLSearchParams({
+            fromChain: "SOL",
+            toChain: targetChainId.toString(),
+            fromToken: "SOL",
+            toToken: toToken,
+            toAddress: recipientAddress,
+            fromAmount: lamports,
+            fromAddress: solanaPublicKey.toBase58(),
+            integrator: process.env.NEXT_PUBLIC_LIFI_INTEGRATOR || "stream-tips",
+            fee: "0.01",
+            slippage: slippageDecimal,
+        });
+
+        const apiKey = process.env.NEXT_PUBLIC_LIFI_API_KEY;
+        const headers: HeadersInit = { 'accept': 'application/json' };
+        if (apiKey) headers['x-lifi-api-key'] = apiKey;
+
+        const response = await fetch(`https://li.quest/v1/quote?${params.toString()}`, { headers });
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error("Li.Fi Quote Failed: " + (errData.message || response.statusText));
+        }
+        const quote = await response.json();
+
+        if (!quote.transactionRequest || !quote.transactionRequest.data) {
+            throw new Error("Invalid quote received from Li.Fi (Missing transaction data)");
+        }
+
+        const txBase64 = quote.transactionRequest.data;
+        onStatus("Signing Solana Transaction...");
+
+        // Deserialize Transaction
+        const txBuffer = Buffer.from(txBase64, 'base64');
+        const transaction = VersionedTransaction.deserialize(txBuffer);
+
+        try {
+            const signature = await sendTransaction(transaction, connection);
+
+            onStatus("Confirming Solana Transaction...");
+            const confirmation = await connection.confirmTransaction(signature, 'confirmed');
+
+            if (confirmation.value.err) {
+                throw new Error("Transaction failed on-chain");
+            }
+
+            onSuccess({
+                txHash: signature,
+                amount: amount,
+                message: message,
+                senderName: useEnsNameFlag && ensName ? ensName : (senderName || "Anonymous"),
+                asset: "SOL",
+                sourceChain: "solana",
+                destChain: "8453", // Base
+                sourceAddress: solanaPublicKey.toBase58(),
+                destAddress: recipientAddress,
+                token: authToken,
+                enableEnsAvatar: useEnsNameFlag && useEnsAvatarFlag,
+                enableEnsBackground: useEnsNameFlag && useEnsBackgroundFlag,
+                enableEnsTwitter: useEnsNameFlag && useEnsTwitterFlag,
+            });
+
+            setMessage("");
+            setAmount("");
+        } catch (e: any) {
+            throw new Error("Solana Transaction Failed: " + (e.message || e));
+        }
+    };
+
+    const handleSuiTip = async (authToken: string) => {
+        if (!suiAccount) throw new Error("Sui wallet not connected");
+        onStatus("Preparing SUI Transaction...");
+
+        const decimals = 9; // SUI
+        // Use BigInt for safety
+        const amountMist = BigInt(Math.floor(parseFloat(amount) * Math.pow(10, decimals)));
+        // Dummy Treasury Address for Demo (Valid 32-byte hex)
+        const treasuryAddress = "0x7d20dcdb2bca4f508ea9613994683eb4e76e9c4ed27464022c9438e54d6404bd";
+
+        const tx = new Transaction();
+        const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(amountMist)]);
+        tx.transferObjects([coin], tx.pure.address(treasuryAddress));
+
+        onStatus("Signing SUI Transaction...");
+        try {
+            const result = await signAndExecuteTransaction({
+                transaction: tx,
+                chain: 'sui:mainnet',
+            });
+
+
+
+            onSuccess({
+                txHash: result.digest,
+                amount: amount,
+                message: message,
+                senderName: useEnsNameFlag && ensName ? ensName : (senderName || "Anonymous"),
+                asset: "SUI",
+                sourceChain: "sui",
+                destChain: "8453", // Base (Simulation)
+                sourceAddress: suiAccount.address,
+                destAddress: recipientAddress,
+                token: authToken,
+                enableEnsAvatar: useEnsNameFlag && useEnsAvatarFlag,
+                enableEnsBackground: useEnsNameFlag && useEnsBackgroundFlag,
+                enableEnsTwitter: useEnsNameFlag && useEnsTwitterFlag,
+            });
+
+            setMessage("");
+            setAmount("");
+        } catch (e: any) {
+            throw new Error("Sui Transaction Failed: " + (e.message || e));
         }
     };
 
