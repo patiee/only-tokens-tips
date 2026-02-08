@@ -91,7 +91,7 @@ function WidgetSettingsContent() {
             return;
         }
 
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/me?token=` + token)
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/me?token=` + token)
             .then(res => {
                 if (res.status === 401) throw new Error("Unauthorized");
                 if (!res.ok) throw new Error("Failed to load profile");
@@ -134,7 +134,7 @@ function WidgetSettingsContent() {
         if (!token) return;
 
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/widget/regenerate`, {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/widget/regenerate`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -170,7 +170,7 @@ function WidgetSettingsContent() {
         if (!token) return;
 
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/widget`, {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/widget`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",

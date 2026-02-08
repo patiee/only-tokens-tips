@@ -15,7 +15,7 @@ export function ProfileMenu() {
     useEffect(() => {
         const token = localStorage.getItem("user_token");
         if (token) {
-            fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/me?token=${token}`)
+            fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/me?token=${token}`)
                 .then(res => {
                     if (res.ok) return res.json();
                     throw new Error("Failed");

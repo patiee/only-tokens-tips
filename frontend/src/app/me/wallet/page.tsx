@@ -63,7 +63,7 @@ function WalletsContent() {
             return;
         }
 
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/me?token=` + token)
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/me?token=` + token)
             .then(res => {
                 if (!res.ok) throw new Error("Failed to fetch profile");
                 return res.json();
@@ -114,7 +114,7 @@ function WalletsContent() {
         }
 
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/me/wallet`, {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/me/wallet`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",

@@ -38,7 +38,7 @@ function TipsContent() {
         }
 
         try {
-            let url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/me/tips?limit=${limit}`;
+            let url = `${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/me/tips?limit=${limit}`;
             if (cursor) url += `&cursor=${cursor}`;
 
             const res = await fetch(url, {
