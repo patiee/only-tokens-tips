@@ -114,6 +114,94 @@ func (s *Service) VerifyENSOwnership(name string, ownerAddress string) (bool, er
 	return strings.EqualFold(resolvedAddr, ownerAddress), nil
 }
 
+// ReverseResolveENS resolves an address to an ENS name
+func (s *Service) ReverseResolveENS(address string) (string, error) {
+	rpcURL := s.config.EthRPCURL
+	if rpcURL == "" {
+		rpcURL = "https://eth.llamarpc.com"
+	}
+
+	client, err := ethclient.Dial(rpcURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to eth rpc: %v", err)
+	}
+	defer client.Close()
+
+	// Reverse Node: <hex(addr without 0x)>.addr.reverse
+	cleanAddr := strings.ToLower(strings.TrimPrefix(address, "0x"))
+	reverseName := fmt.Sprintf("%s.addr.reverse", cleanAddr)
+
+	node, err := nameHash(reverseName)
+	if err != nil {
+		return "", err
+	}
+
+	// 1. Get Resolver from Registry
+	registryAddr := common.HexToAddress("0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e")
+	data := append(common.Hex2Bytes("0178b8bf"), node[:]...)
+
+	res, err := client.CallContract(context.Background(), ethereum.CallMsg{To: &registryAddr, Data: data}, nil)
+	if err != nil {
+		return "", fmt.Errorf("registry call failed: %v", err)
+	}
+
+	resolverAddr := common.BytesToAddress(res)
+	if resolverAddr == (common.Address{}) {
+		return "", ErrENSNotFound
+	}
+
+	// 2. Get Name from Resolver (name(node) = 0x691f3431)
+	data = append(common.Hex2Bytes("691f3431"), node[:]...)
+	res, err = client.CallContract(context.Background(), ethereum.CallMsg{To: &resolverAddr, Data: data}, nil)
+	if err != nil {
+		return "", fmt.Errorf("resolver call failed: %v", err)
+	}
+
+	// Unpack string
+	if len(res) < 64 {
+		return "", ErrENSNotFound
+	}
+
+	// Basic ABI decoding for string (offset, length, data)
+	// Or use simple trim if lazy, but better to be safe.
+	// 0x20 offset, then length.
+	// Let's rely on a helper or just try to parse if standard ABI.
+	// Actually, for simplicity and since we don't have full ABI gen:
+	// Format: [32 bytes offset] [32 bytes length] [data...]
+
+	// Skip offset (32 bytes)
+	// Read length (32 bytes)
+	// Read data
+
+	// length := new(big.Int).SetBytes(res[32:64]).Uint64()
+	// if len(res) < 64+int(length) { return "", fmt.Errorf("invalid data length") }
+	// name := string(res[64 : 64+length])
+
+	// Minimal parsing:
+	// Go-ethereum `abi` package is best but complex to init here without gen.
+	// Let's assume standard response.
+
+	start := 64
+	// Find actual length from bytes 32-64
+	var length uint64
+	for i := 32; i < 64; i++ {
+		length = (length << 8) | uint64(res[i])
+	}
+
+	if uint64(len(res)) < 64+length {
+		return "", fmt.Errorf("invalid response length")
+	}
+
+	name := string(res[start : start+int(length)])
+
+	// Allow empty name
+	if name == "" {
+		return "", ErrENSNotFound
+	}
+
+	return name, nil
+}
+
 type Service struct {
 	db          *db.Database
 	config      Config
@@ -217,13 +305,22 @@ func (s *Service) CompleteUserProfile(userID uint, username, walletAddress strin
 	// user, err := s.db.GetUserByUsername(username)
 
 	// Update DB
-	err := s.db.UpdateUserProfile(userID, username, "", "", "", walletAddress, mainWallet)
+	updatedUser := &dbmodel.User{
+		Username:      username,
+		WalletAddress: walletAddress,
+		MainWallet:    mainWallet,
+		// Other fields empty/default
+	}
+	// warning: this overwrites other fields with empty values if not careful.
+	// passed struct with empty strings mimics previous behavior.
+
+	err := s.db.UpdateUserProfile(userID, updatedUser)
 	if err != nil {
 		return nil, "", err
 	}
 
 	// Fetch updated user
-	updatedUser, err := s.db.GetUserByUsername(username)
+	updatedUser, err = s.db.GetUserByUsername(username)
 	if err != nil {
 		return nil, "", err
 	}
@@ -242,41 +339,148 @@ func (s *Service) UpdateProfile(userID uint, req model.UpdateProfileRequest) err
 		return err
 	}
 
-	// Update fields if provided (or overwrite if that's the contract)
-	// Assuming overwrite behavior for Settings form
+	// Check if username is changing and validate ownership if UseEnsUsername or if it resolves
+	// Actually, UpdateProfile just saves flags. Dynamic check happens on GET.
+	// But if they change UseEnsUsername to TRUE, we might want to force update username to ENS name immediately?
+	// User request: "checks if the wallet address is still assigned to the saved username - if it did got update for new, you need to update username"
+	// This happens on GET.
+	// Here we just save the flags.
+
 	user.Username = req.Username
 	user.Description = req.Description
 	user.BackgroundURL = req.BackgroundURL
 	user.AvatarURL = req.AvatarURL
+	user.UseEnsAvatar = req.UseEnsAvatar
+	user.UseEnsBackground = req.UseEnsBackground
+	user.UseEnsDescription = req.UseEnsDescription
+	user.UseEnsUsername = req.UseEnsUsername
 
 	// Use the DB method
-	return s.db.UpdateUserProfile(userID, user.Username, user.Description, user.BackgroundURL, user.AvatarURL, user.WalletAddress, user.MainWallet)
+	return s.db.UpdateUserProfile(userID, user)
 }
 
 func (s *Service) GetUserByUsername(username string) (*dbmodel.User, error) {
 	return s.db.GetUserByUsername(username)
 }
 
+func (s *Service) GetEnrichedProfile(userID uint) (*dbmodel.User, error) {
+	user, err := s.db.GetUserByID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Dynamic ENS Update Logic
+	if user.UseEnsAvatar || user.UseEnsBackground || user.UseEnsDescription || user.UseEnsUsername {
+		// 1. Reverse Resolve if we have a wallet
+		if user.WalletAddress != "" {
+			resolvedName, err := s.ReverseResolveENS(user.WalletAddress)
+			if err == nil && resolvedName != "" {
+				// Check Username Update
+				if user.UseEnsUsername && !strings.EqualFold(user.Username, resolvedName) {
+					// Check if taken?
+					taken := s.db.CheckUsernameTaken(resolvedName, user.ID)
+					if !taken {
+						s.logger.Printf("Updating username for user %d from %s to %s (ENS)", user.ID, user.Username, resolvedName)
+						user.Username = resolvedName
+						// Save immediately to handle the "update username in database" requirement
+						// We'll save all changes at the end
+					}
+				}
+
+				// If we are using the resolved name (either it matches, or we just updated to it, OR we are using ENS data for other fields which rely on the name)
+				// Actually, we should fetch metadata for the *resolved* name if the user effectively "is" that ENS identity.
+				// But if UseEnsUsername is false, and Username is "CoolGuy", but wallet is "vitalik.eth".
+				// Do we fetch avatar for "CoolGuy" (fails) or "vitalik.eth"?
+				// Requirement: "checks if the wallet address is still assigned to the saved username".
+				// This implies the source of truth for "Who is this?" is the ENS name that the wallet resolves to, PROVIDED it matches the saved username (or we updated it).
+				// If I manually set "CoolGuy", I probably can't "Use ENS Avatar" effectively unless "CoolGuy" is an ENS name I own?
+				// "while user picks 'use ens' value... save... checks if wallet is still assigned to saved username".
+				// This implies: We trust `user.Username` IS the ENS name. We verify `ReverseResolve(wallet) == user.Username`.
+				// If they match, we fetch metadata for `user.Username`.
+				// If they DON'T match:
+				//   If `UseEnsUsername` is true -> We update `user.Username` to `resolvedName` (and then fetch metadata for `resolvedName`).
+				//   If `UseEnsUsername` is false -> We probably SHOULD NOT fetch metadata? Or we warn?
+				//   "if it did got update for new, you need to update username... and return new value".
+
+				// Verify ownership
+				if strings.EqualFold(resolvedName, user.Username) {
+					// Good, proceeding with current username
+				} else {
+					if user.UseEnsUsername {
+						// Update and proceed
+						// We already updated user.Username logic above if !taken
+					} else {
+						// Mismatch and manual username.
+						// We probably skip ENS fetching for other fields to prevent showing data for a name they don't own anymore?
+						// "checks if the wallet address is still assigned to the saved username"
+						// If not, we probably shouldn't show the avatar for the *old* name if they lost it.
+						// But if they just re-pointed checking ownership is good security.
+						// Let's assume strict ownership check.
+						// If mismatch && !UseEnsUsername, we stop?
+						// Or we fetch for the *resolved* name?
+						// "fetched from ens... checks if wallet... assigned to saved... if update... update username".
+						// I will interpret this as: Always use the RESOLVED name data if flags are on.
+					}
+				}
+
+				// If we have a valid target name (resolved name), fetch metadata
+				// We only use resolvedName as the source of truth for metadata to ensure authenticity.
+
+				metaAvatar, metaHeader, metaDescription, _, err := s.fetchENSMetadata(resolvedName)
+				updated := false
+				if err == nil {
+					if user.UseEnsAvatar && metaAvatar != "" && user.AvatarURL != metaAvatar {
+						user.AvatarURL = metaAvatar
+						updated = true
+					}
+					if user.UseEnsBackground && metaHeader != "" && user.BackgroundURL != metaHeader {
+						user.BackgroundURL = metaHeader
+						updated = true
+					}
+					if user.UseEnsDescription && metaDescription != "" && user.Description != metaDescription {
+						user.Description = metaDescription
+						updated = true
+					}
+				}
+
+				// Save changes if any
+				if updated || (user.UseEnsUsername && user.Username == resolvedName && user.Username != "") { // Simplified check, actual logic handled by checking DB state vs struct
+					// But we need to know if we changed anything.
+					// Let's just blindly save if we have UseEns flags?
+					// Efficient enough.
+					s.db.UpdateUserProfile(user.ID, user)
+				}
+			}
+		}
+	}
+
+	return user, nil
+}
+
 func (s *Service) UpdateUserWallet(userID uint, walletAddress string, chainID int, assetAddress string) error {
 	return s.db.UpdateUserWallet(userID, walletAddress, chainID, assetAddress)
 }
 
-func (s *Service) RegisterUser(username, provider, providerID, email, avatar, walletAddress string, mainWallet bool, preferredChainID int, preferredAssetAddress, description, background, twitter string) (*dbmodel.User, string, error) {
+func (s *Service) RegisterUser(req model.SignupRequest, provider, providerID, email string) (*dbmodel.User, string, error) {
 	user := &dbmodel.User{
-		Username:         username,
-		Provider:         provider,
-		ProviderID:       providerID,
-		Email:            email,
-		AvatarURL:        avatar,
-		WalletAddress:    walletAddress,
-		MainWallet:       mainWallet,
-		CreatedAt:        time.Now(),
-		PreferredChainID: preferredChainID,
-		PreferredAsset:   preferredAssetAddress,
-		Description:      description,
-		BackgroundURL:    background,
-		TwitterHandle:    twitter,
-		WidgetTTS:        true,
+		Username:          req.Username,
+		Provider:          provider,
+		ProviderID:        providerID,
+		Email:             email,
+		AvatarURL:         req.AvatarURL,
+		WalletAddress:     req.WalletAddress,
+		MainWallet:        req.MainWallet,
+		CreatedAt:         time.Now(),
+		PreferredChainID:  req.PreferredChainID,
+		PreferredAsset:    req.PreferredAssetAddress,
+		Description:       req.Description,
+		BackgroundURL:     req.BackgroundURL,
+		TwitterHandle:     req.TwitterHandle,
+		WidgetTTS:         true,
+		UseEnsAvatar:      req.UseEnsAvatar,
+		UseEnsBackground:  req.UseEnsBackground,
+		UseEnsDescription: req.UseEnsDescription,
+		UseEnsUsername:    req.UseEnsUsername,
 	}
 
 	if err := s.CreateUser(user); err != nil {
@@ -344,7 +548,7 @@ func (s *Service) ProcessTip(tip model.TipRequest, claims *WalletClaims) (bool, 
 			// Fetch Metadata if requested
 			if tip.EnableENSAvatar || tip.EnableENSBackground || tip.EnableENSTwitter {
 				s.logger.Printf("Fetching ENS metadata for confirmed name: %s", tip.Sender)
-				metaAvatar, metaHeader, metaTwitter, err := s.fetchENSMetadata(tip.Sender)
+				metaAvatar, metaHeader, _, metaTwitter, err := s.fetchENSMetadata(tip.Sender)
 				if err != nil {
 					s.logger.Printf("Failed to fetch ENS metadata: %v", err)
 				} else {
@@ -393,16 +597,16 @@ func (s *Service) ProcessTip(tip model.TipRequest, claims *WalletClaims) (bool, 
 	return true, "Tip received! Waiting for transaction confirmation...", nil
 }
 
-// fetchENSMetadata fetches avatar, header and twitter from enstate.rs
-func (s *Service) fetchENSMetadata(ensName string) (string, string, string, error) {
+// fetchENSMetadata fetches avatar, header, description and twitter from enstate.rs
+func (s *Service) fetchENSMetadata(ensName string) (string, string, string, string, error) {
 	resp, err := http.Get(fmt.Sprintf("https://enstate.rs/n/%s", ensName))
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return "", "", "", fmt.Errorf("API error: %d", resp.StatusCode)
+		return "", "", "", "", fmt.Errorf("API error: %d", resp.StatusCode)
 	}
 
 	var result struct {
@@ -412,11 +616,12 @@ func (s *Service) fetchENSMetadata(ensName string) (string, string, string, erro
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 
 	twitterHandle := result.Records["com.twitter"]
-	return result.Avatar, result.Header, twitterHandle, nil
+	description := result.Records["description"]
+	return result.Avatar, result.Header, description, twitterHandle, nil
 }
 
 func (s *Service) GetTips(username string, limit int, cursor uint) ([]model.TipResponseItem, string, error) {

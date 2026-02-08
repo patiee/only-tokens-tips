@@ -1,10 +1,62 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-// ... (Previous imports)
-import { User, Image as ImageIcon, FileText, Check, Save, Loader2, Twitch, Monitor, Chrome, AlertTriangle, ArrowLeft, Upload } from "lucide-react";
+import { useAccount, useEnsName, useEnsAvatar as useEnsAvatarHook, useEnsText } from "wagmi";
+import { User, Image as ImageIcon, FileText, Check, Save, Loader2, Twitch, Monitor, Chrome, AlertTriangle, ArrowLeft, Upload, Settings } from "lucide-react";
+
+function FieldSettings({ label, hasDNS, useDNS, onToggle }: { label: string, hasDNS: boolean, useDNS: boolean, onToggle: (useDNS: boolean) => void }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    if (!hasDNS) return null;
+
+    return (
+        <div className="relative" ref={containerRef}>
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="p-1 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-500 hover:text-zinc-300"
+            >
+                <Settings size={14} />
+            </button>
+
+            {isOpen && (
+                <div className="absolute right-0 top-full mt-2 w-48 bg-zinc-900 border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                    <div className="p-2 space-y-1">
+                        <button
+                            type="button"
+                            onClick={() => { onToggle(true); setIsOpen(false); }}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors ${useDNS ? "bg-purple-500/10 text-purple-400" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"}`}
+                        >
+                            <span>Use ENS {label}</span>
+                            {useDNS && <Check size={14} />}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { onToggle(false); setIsOpen(false); }}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors ${!useDNS ? "bg-purple-500/10 text-purple-400" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"}`}
+                        >
+                            <span>Edit Manually</span>
+                            {!useDNS && <Check size={14} />}
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
 
 export default function SettingsPage() {
     const router = useRouter();
@@ -18,6 +70,27 @@ export default function SettingsPage() {
         background_url: ""
     });
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+    // ENS Hooks
+    const { address: evmAddress, isConnected: isEVMConnected } = useAccount();
+    const { data: ensName } = useEnsName({ address: evmAddress });
+    const { data: ensAvatar } = useEnsAvatarHook({ name: ensName! });
+    const { data: ensDescription } = useEnsText({ name: ensName!, key: 'description' });
+    const { data: ensHeader } = useEnsText({ name: ensName!, key: 'header' });
+
+    // ENS Toggles State
+    const [useEnsUsername, setUseEnsUsername] = useState(false);
+    const [useEnsAvatar, setUseEnsAvatar] = useState(false);
+    const [useEnsBackground, setUseEnsBackground] = useState(false);
+    const [useEnsDescription, setUseEnsDescription] = useState(false);
+
+    // Effect to enforce ENS values when toggles are on
+    useEffect(() => {
+        if (useEnsUsername && ensName) setFormData(prev => ({ ...prev, username: ensName }));
+        if (useEnsAvatar && ensAvatar) setFormData(prev => ({ ...prev, avatar_url: ensAvatar }));
+        if (useEnsBackground && ensHeader) setFormData(prev => ({ ...prev, background_url: ensHeader }));
+        if (useEnsDescription && ensDescription) setFormData(prev => ({ ...prev, description: ensDescription }));
+    }, [useEnsUsername, useEnsAvatar, useEnsBackground, useEnsDescription, ensName, ensAvatar, ensHeader, ensDescription]);
 
     useEffect(() => {
         const token = localStorage.getItem("user_token");
@@ -39,6 +112,17 @@ export default function SettingsPage() {
                     avatar_url: data.avatar_url || "",
                     background_url: data.background_url || ""
                 });
+
+                // Initialize toggles
+                setUseEnsUsername(data.use_ens_username || false);
+                setUseEnsAvatar(data.use_ens_avatar || false);
+                setUseEnsBackground(data.use_ens_background || false);
+                setUseEnsDescription(data.use_ens_description || false);
+
+                // Initialize toggles based on if current data matches ENS data
+                // Or just default to false unless user explicitly turns it on? 
+                // For existing users, maybe manual is better.
+                // But if they have ENS, we can show the option.
             })
             .catch(() => {
                 localStorage.removeItem("user_token");
@@ -48,6 +132,8 @@ export default function SettingsPage() {
     }, []);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        if (e.target.name === 'username' && useEnsUsername) return;
+        if (e.target.name === 'description' && useEnsDescription) return;
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
@@ -64,7 +150,13 @@ export default function SettingsPage() {
                     "Content-Type": "application/json",
                     "Authorization": `Bearer ${token}`
                 },
-                body: JSON.stringify(formData)
+                body: JSON.stringify({
+                    ...formData,
+                    use_ens_username: useEnsUsername,
+                    use_ens_avatar: useEnsAvatar,
+                    use_ens_background: useEnsBackground,
+                    use_ens_description: useEnsDescription
+                })
             });
 
             const data = await res.json();
@@ -101,21 +193,15 @@ export default function SettingsPage() {
         }
     };
 
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-black text-white flex items-center justify-center">
-                <Loader2 className="animate-spin text-zinc-500" size={32} />
-            </div>
-        );
-    }
-
     const isConnected = (p: string) => profile?.connected_providers?.includes(p);
 
     const handleFileUpload = async (file: File, type: 'avatar' | 'background') => {
+        if (type === 'avatar' && useEnsAvatar) return;
+        if (type === 'background' && useEnsBackground) return;
+
         const token = localStorage.getItem("user_token");
         if (!token) return;
 
-        // Optimistic UI could show uploading state but let's keep it simple
         const formData = new FormData();
         formData.append("file", file);
 
@@ -142,6 +228,14 @@ export default function SettingsPage() {
             setMessage({ type: 'error', text: "Failed to upload image" });
         }
     };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-black text-white flex items-center justify-center">
+                <Loader2 className="animate-spin text-zinc-500" size={32} />
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-black text-white selection:bg-purple-500/30 relative mb-20">
@@ -176,58 +270,88 @@ export default function SettingsPage() {
                                 <div className="space-y-4 mb-8">
                                     <div className="relative group">
                                         {/* Background Image */}
-                                        <div
-                                            className="w-full h-48 rounded-2xl bg-black/50 border border-white/5 overflow-hidden cursor-pointer relative transition-all hover:border-white/10"
-                                            onClick={() => document.getElementById('bg-upload')?.click()}
-                                        >
-                                            {formData.background_url ? (
-                                                <img src={formData.background_url} alt="Background" className="w-full h-full object-cover transition-opacity group-hover:opacity-75" />
-                                            ) : (
-                                                <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600 gap-2">
-                                                    <FileText size={32} />
-                                                    <span className="text-xs font-bold uppercase tracking-wider">Upload Cover</span>
-                                                </div>
-                                            )}
-
-                                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <div className="bg-black/50 backdrop-blur-sm p-3 rounded-full border border-white/10">
-                                                    <Upload className="text-white" size={24} />
-                                                </div>
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between items-center px-1">
+                                                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Cover Image</label>
+                                                <FieldSettings
+                                                    label="Cover"
+                                                    hasDNS={!!ensHeader}
+                                                    useDNS={useEnsBackground}
+                                                    onToggle={setUseEnsBackground}
+                                                />
                                             </div>
-                                            <input
-                                                id="bg-upload"
-                                                type="file"
-                                                accept="image/*"
-                                                className="hidden"
-                                                onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'background')}
-                                            />
+                                            <div
+                                                className={`w-full h-48 rounded-2xl bg-black/50 border overflow-hidden relative transition-all ${useEnsBackground ? "border-purple-500/50 cursor-default" : "border-white/5 cursor-pointer hover:border-white/10"}`}
+                                                onClick={() => !useEnsBackground && document.getElementById('bg-upload')?.click()}
+                                            >
+                                                {formData.background_url ? (
+                                                    <img src={formData.background_url} alt="Background" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600 gap-2">
+                                                        <FileText size={32} />
+                                                        <span className="text-xs font-bold uppercase tracking-wider">Upload Cover</span>
+                                                    </div>
+                                                )}
+
+                                                {!useEnsBackground && (
+                                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <div className="bg-black/50 backdrop-blur-sm p-3 rounded-full border border-white/10">
+                                                            <Upload className="text-white" size={24} />
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                <input
+                                                    id="bg-upload"
+                                                    type="file"
+                                                    accept="image/*"
+                                                    className="hidden"
+                                                    disabled={useEnsBackground}
+                                                    onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'background')}
+                                                />
+                                            </div>
                                         </div>
 
                                         {/* Avatar Image (Overlapping) */}
-                                        <div
-                                            className="absolute -bottom-10 left-6 w-24 h-24 rounded-full border-4 border-black bg-zinc-900 overflow-hidden cursor-pointer group/avatar shadow-xl"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                document.getElementById('avatar-upload')?.click();
-                                            }}
-                                        >
-                                            {formData.avatar_url ? (
-                                                <img src={formData.avatar_url} alt="Avatar" className="w-full h-full object-cover transition-opacity group-hover/avatar:opacity-75" />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-zinc-500">
-                                                    <User size={32} />
+                                        <div className="absolute -bottom-10 left-6">
+                                            <div className="relative">
+                                                <div
+                                                    className={`w-24 h-24 rounded-full border-4 border-black bg-zinc-900 overflow-hidden relative shadow-xl z-20 ${useEnsAvatar ? "cursor-default" : "cursor-pointer group/avatar"}`}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (!useEnsAvatar) document.getElementById('avatar-upload')?.click();
+                                                    }}
+                                                >
+                                                    {formData.avatar_url ? (
+                                                        <img src={formData.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-zinc-500">
+                                                            <User size={32} />
+                                                        </div>
+                                                    )}
+                                                    {!useEnsAvatar && (
+                                                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity bg-black/40 backdrop-blur-[2px]">
+                                                            <Upload className="text-white" size={20} />
+                                                        </div>
+                                                    )}
+                                                    <input
+                                                        id="avatar-upload"
+                                                        type="file"
+                                                        accept="image/*"
+                                                        className="hidden"
+                                                        disabled={useEnsAvatar}
+                                                        onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'avatar')}
+                                                    />
                                                 </div>
-                                            )}
-                                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity bg-black/40 backdrop-blur-[2px]">
-                                                <Upload className="text-white" size={20} />
+                                                {/* Settings Button for Avatar */}
+                                                <div className="absolute -right-8 top-0 bg-black/50 rounded-lg backdrop-blur-md border border-white/10">
+                                                    <FieldSettings
+                                                        label="Avatar"
+                                                        hasDNS={!!ensAvatar}
+                                                        useDNS={useEnsAvatar}
+                                                        onToggle={setUseEnsAvatar}
+                                                    />
+                                                </div>
                                             </div>
-                                            <input
-                                                id="avatar-upload"
-                                                type="file"
-                                                accept="image/*"
-                                                className="hidden"
-                                                onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'avatar')}
-                                            />
                                         </div>
                                     </div>
 
@@ -237,25 +361,55 @@ export default function SettingsPage() {
 
                                 <div className="space-y-4 pt-4">
                                     <div>
-                                        <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Username</label>
+                                        <div className="flex justify-between items-center mb-1.5">
+                                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Username</label>
+                                            <FieldSettings
+                                                label="Name"
+                                                hasDNS={!!ensName}
+                                                useDNS={useEnsUsername}
+                                                onToggle={(val) => {
+                                                    setUseEnsUsername(val);
+                                                    if (val && ensName) setFormData(prev => ({ ...prev, username: ensName }));
+                                                }}
+                                            />
+                                        </div>
                                         <input
                                             type="text"
                                             name="username"
                                             value={formData.username}
                                             onChange={handleChange}
-                                            className="w-full bg-black/50 border border-white/5 rounded-xl px-4 py-3 text-white focus:ring-1 focus:ring-purple-500/50 focus:border-purple-500/50 outline-none transition-all placeholder:text-zinc-700"
+                                            disabled={useEnsUsername}
+                                            className={`w-full bg-black/50 border rounded-xl px-4 py-3 text-white focus:ring-1 focus:ring-purple-500/50 outline-none transition-all placeholder:text-zinc-700 ${useEnsUsername
+                                                ? "border-purple-500/50 text-purple-200 cursor-not-allowed bg-purple-900/10"
+                                                : "border-white/5 focus:border-purple-500/50"
+                                                }`}
                                             placeholder="Username"
                                         />
                                     </div>
 
                                     <div>
-                                        <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Description</label>
+                                        <div className="flex justify-between items-center mb-1.5">
+                                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Description</label>
+                                            <FieldSettings
+                                                label="Bio"
+                                                hasDNS={!!ensDescription}
+                                                useDNS={useEnsDescription}
+                                                onToggle={(val) => {
+                                                    setUseEnsDescription(val);
+                                                    if (val && ensDescription) setFormData(prev => ({ ...prev, description: ensDescription }));
+                                                }}
+                                            />
+                                        </div>
                                         <textarea
                                             name="description"
                                             value={formData.description}
                                             onChange={handleChange}
+                                            disabled={useEnsDescription}
                                             rows={3}
-                                            className="w-full bg-black/50 border border-white/5 rounded-xl px-4 py-3 text-white focus:ring-1 focus:ring-purple-500/50 focus:border-purple-500/50 outline-none transition-all placeholder:text-zinc-700 resize-none"
+                                            className={`w-full bg-black/50 border rounded-xl px-4 py-3 text-white focus:ring-1 focus:ring-purple-500/50 outline-none transition-all placeholder:text-zinc-700 resize-none ${useEnsDescription
+                                                ? "border-purple-500/50 text-purple-200 cursor-not-allowed bg-purple-900/10"
+                                                : "border-white/5 focus:border-purple-500/50"
+                                                }`}
                                             placeholder="Tell us about yourself..."
                                         />
                                     </div>
@@ -315,27 +469,6 @@ export default function SettingsPage() {
                                         <Twitch className="text-[#9146FF]" size={18} /> Connect Twitch
                                     </button>
                                 )}
-
-                                {/* {isConnected('tiktok') ? (
-                                    <button disabled className="w-full flex items-center justify-between p-3 rounded-xl bg-black/40 border border-white/5 text-zinc-500 text-sm font-bold cursor-default">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-5 h-5 flex items-center justify-center bg-black rounded-full border border-white/10">
-                                                <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="currentColor">
-                                                    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
-                                                </svg>
-                                            </div> TikTok
-                                        </div>
-                                        <Check size={16} className="text-green-500" />
-                                    </button>
-                                ) : (
-                                    <button onClick={() => handleSocialConnect("tiktok")} className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-900/50 border border-white/5 hover:bg-black/50 hover:border-white/20 hover:text-white transition-all text-sm font-medium text-zinc-300">
-                                        <div className="w-5 h-5 flex items-center justify-center bg-black rounded-full border border-white/10">
-                                            <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
-                                            </svg>
-                                        </div> Connect TikTok
-                                    </button>
-                                )} */}
                             </div>
                         </div>
                     </div>

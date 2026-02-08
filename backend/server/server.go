@@ -363,29 +363,21 @@ func (s *Server) HandleSignup(c *gin.Context) {
 	// Register User
 	// Use claims data + request data (e.g. eth address might come from wallet connection in step 3)
 	// Priority: Claims EthAddress (if wallet login) > Request EthAddress (if linked later)
-	walletAddr := claims.WalletAddress
-	if walletAddr == "" {
-		walletAddr = req.WalletAddress
+	// Priority: Claims EthAddress (if wallet login) > Request EthAddress (if linked later)
+	if claims.WalletAddress != "" {
+		req.WalletAddress = claims.WalletAddress
 	}
 
-	avatar := req.AvatarURL
-	if avatar == "" {
-		avatar = claims.AvatarURL
+	// Priority: Request (User Uploaded) > Claims (Social Provider)
+	if req.AvatarURL == "" {
+		req.AvatarURL = claims.AvatarURL
 	}
 
 	newUser, sessionToken, err := s.service.RegisterUser(
-		req.Username,
+		req,
 		claims.Provider,
 		claims.ProviderID,
 		claims.Email,
-		avatar,
-		walletAddr,
-		req.MainWallet,
-		req.PreferredChainID,
-		req.PreferredAssetAddress,
-		req.Description,
-		req.BackgroundURL,
-		req.TwitterHandle,
 	)
 
 	if err != nil {
@@ -423,7 +415,9 @@ func (s *Server) HandleMe(c *gin.Context) {
 		return
 	}
 
-	user, err := s.service.GetUserByUsername(claims.Username)
+	// Use GetEnrichedProfile for dynamic ENS data
+	// ValidateSessionToken returns userId in claims
+	user, err := s.service.GetEnrichedProfile(claims.UserID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
@@ -459,6 +453,10 @@ func (s *Server) HandleMe(c *gin.Context) {
 		"widget_amount_color":     user.WidgetAmountColor,
 		"widget_message_color":    user.WidgetMessageColor,
 		"twitch_username":         user.TwitchUsername,
+		"use_ens_avatar":          user.UseEnsAvatar,
+		"use_ens_background":      user.UseEnsBackground,
+		"use_ens_description":     user.UseEnsDescription,
+		"use_ens_username":        user.UseEnsUsername,
 	})
 }
 

@@ -28,6 +28,10 @@ type SignupRequest struct {
 	Description           string `json:"description"`
 	BackgroundURL         string `json:"background_url"`
 	TwitterHandle         string `json:"twitter_handle"`
+	UseEnsAvatar          bool   `json:"use_ens_avatar"`
+	UseEnsBackground      bool   `json:"use_ens_background"`
+	UseEnsDescription     bool   `json:"use_ens_description"`
+	UseEnsUsername        bool   `json:"use_ens_username"`
 }
 
 type UpdateWidgetRequest struct {
@@ -45,8 +49,12 @@ type UpdateWalletRequest struct {
 }
 
 type UpdateProfileRequest struct {
-	Username      string `json:"username"`
-	Description   string `json:"description"`
-	BackgroundURL string `json:"background_url"`
-	AvatarURL     string `json:"avatar_url"`
+	Username          string `json:"username"`
+	Description       string `json:"description"`
+	BackgroundURL     string `json:"background_url"`
+	AvatarURL         string `json:"avatar_url"`
+	UseEnsAvatar      bool   `json:"use_ens_avatar"`
+	UseEnsBackground  bool   `json:"use_ens_background"`
+	UseEnsDescription bool   `json:"use_ens_description"`
+	UseEnsUsername    bool   `json:"use_ens_username"`
 }

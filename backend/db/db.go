@@ -134,14 +134,18 @@ func (d *Database) UpdateUserWallet(userID uint, walletAddress string, chainID i
 	return d.conn.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
 }
 
-func (d *Database) UpdateUserProfile(userID uint, username, description, backgroundURL, avatarURL, walletAddress string, mainWallet bool) error {
+func (d *Database) UpdateUserProfile(userID uint, user *model.User) error {
 	updates := map[string]interface{}{
-		"username":       username,
-		"description":    description,
-		"background_url": backgroundURL,
-		"avatar_url":     avatarURL,
-		"eth_address":    walletAddress,
-		"main_wallet":    mainWallet,
+		"username":            user.Username,
+		"description":         user.Description,
+		"background_url":      user.BackgroundURL,
+		"avatar_url":          user.AvatarURL,
+		"eth_address":         user.WalletAddress,
+		"main_wallet":         user.MainWallet,
+		"use_ens_avatar":      user.UseEnsAvatar,
+		"use_ens_background":  user.UseEnsBackground,
+		"use_ens_description": user.UseEnsDescription,
+		"use_ens_username":    user.UseEnsUsername,
 	}
 	return d.conn.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
 }

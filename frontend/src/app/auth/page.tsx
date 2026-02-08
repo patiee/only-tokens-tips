@@ -1,10 +1,10 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, Suspense, useRef } from "react";
 import { jwtDecode } from "jwt-decode";
-import { useAccount, useSignMessage, useDisconnect, useEnsName, useEnsAvatar } from "wagmi";
-import { Twitch, Chrome, ArrowLeft, Wallet, AlertTriangle, Check, X, ExternalLink, User, FileText, Upload } from "lucide-react";
+import { useAccount, useSignMessage, useDisconnect, useEnsName, useEnsAvatar as useEnsAvatarHook, useEnsText } from "wagmi";
+import { Twitch, Chrome, ArrowLeft, Wallet, AlertTriangle, Check, X, ExternalLink, User, FileText, Upload, Settings, ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { evmChains } from "@/config/generated-chains";
 import { allChains, chainFamilies, ChainFamily } from "@/config/chains";
@@ -23,6 +23,58 @@ export default function AuthPage() {
         <Suspense fallback={<div>Loading...</div>}>
             <AuthContent />
         </Suspense>
+    );
+}
+
+function FieldSettings({ label, hasDNS, useDNS, onToggle }: { label: string, hasDNS: boolean, useDNS: boolean, onToggle: (useDNS: boolean) => void }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    if (!hasDNS) return null;
+
+    return (
+        <div className="relative" ref={containerRef}>
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="p-1 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-500 hover:text-zinc-300"
+            >
+                <Settings size={14} />
+            </button>
+
+            {isOpen && (
+                <div className="absolute right-0 top-full mt-2 w-48 bg-zinc-900 border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                    <div className="p-2 space-y-1">
+                        <button
+                            type="button"
+                            onClick={() => { onToggle(true); setIsOpen(false); }}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors ${useDNS ? "bg-purple-500/10 text-purple-400" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"}`}
+                        >
+                            <span>Use ENS {label}</span>
+                            {useDNS && <Check size={14} />}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { onToggle(false); setIsOpen(false); }}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors ${!useDNS ? "bg-purple-500/10 text-purple-400" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"}`}
+                        >
+                            <span>Edit Manually</span>
+                            {!useDNS && <Check size={14} />}
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -48,17 +100,36 @@ function AuthContent() {
     // ENS Hooks
     const { address: evmAddress, isConnected: isEVMConnected } = useAccount();
     const { data: ensName } = useEnsName({ address: evmAddress });
-    const { data: ensAvatar } = useEnsAvatar({ name: ensName! });
+    const { data: ensAvatar } = useEnsAvatarHook({ name: ensName! });
+    const { data: ensDescription } = useEnsText({ name: ensName!, key: 'description' });
+    const { data: ensHeader } = useEnsText({ name: ensName!, key: 'header' }); // 'header' is common for background, or 'url'
+
+    // ENS Toggles State
+    const [useEnsUsername, setUseEnsUsername] = useState(false);
+    const [useEnsAvatar, setUseEnsAvatar] = useState(false);
+    const [useEnsBackground, setUseEnsBackground] = useState(false);
+    const [useEnsDescription, setUseEnsDescription] = useState(false);
 
     useEffect(() => {
         if (isEVMConnected && evmAddress) {
-            // Auto-fill from ENS
+            // Auto-fill and default to true if data exists
             if (ensName) {
+                const hasAvatar = !!ensAvatar;
+                const hasBackground = !!ensHeader;
+                const hasDescription = !!ensDescription;
+
+                setUseEnsUsername(true);
+                setUseEnsAvatar(hasAvatar);
+                setUseEnsBackground(hasBackground);
+                setUseEnsDescription(hasDescription);
+
                 setFormData(prev => ({
                     ...prev,
                     username: ensName,
-                    avatar_url: ensAvatar || prev.avatar_url,
-                    wallet_address: evmAddress
+                    avatar_url: hasAvatar ? ensAvatar : prev.avatar_url,
+                    wallet_address: evmAddress,
+                    description: hasDescription ? ensDescription! : prev.description,
+                    background_url: hasBackground ? ensHeader! : prev.background_url,
                 }));
             } else {
                 setFormData(prev => ({
@@ -67,7 +138,16 @@ function AuthContent() {
                 }));
             }
         }
-    }, [isEVMConnected, evmAddress, ensName, ensAvatar]);
+    }, [isEVMConnected, evmAddress, ensName, ensAvatar, ensDescription, ensHeader]);
+
+    // Effect to enforce ENS values when toggles are on
+    useEffect(() => {
+        if (useEnsUsername && ensName) setFormData(prev => ({ ...prev, username: ensName }));
+        if (useEnsAvatar && ensAvatar) setFormData(prev => ({ ...prev, avatar_url: ensAvatar }));
+        if (useEnsBackground && ensHeader) setFormData(prev => ({ ...prev, background_url: ensHeader }));
+        if (useEnsDescription && ensDescription) setFormData(prev => ({ ...prev, description: ensDescription }));
+    }, [useEnsUsername, useEnsAvatar, useEnsBackground, useEnsDescription, ensName, ensAvatar, ensHeader, ensDescription]);
+
 
     useEffect(() => {
         const error = searchParams.get("error");
@@ -140,6 +220,7 @@ function AuthContent() {
     };
 
     const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (useEnsUsername) return; // Prevent change if locked
         const val = e.target.value;
         setFormData({ ...formData, username: val });
         setUsernameError(validateUsername(val));
@@ -150,6 +231,10 @@ function AuthContent() {
     useEffect(() => {
         const username = formData.username;
         if (!username || username.length < 3 || usernameError) return;
+        if (useEnsUsername) {
+            setUsernameError(""); // Assume ENS is valid if connected/verified
+            return;
+        }
 
         const checkAvailability = async () => {
             // If it looks like ENS and user is connected, we might skip or handle differently,
@@ -178,7 +263,7 @@ function AuthContent() {
 
         const timeoutId = setTimeout(checkAvailability, 500); // 500ms debounce
         return () => clearTimeout(timeoutId);
-    }, [formData.username, usernameError]);
+    }, [formData.username, usernameError, useEnsUsername]);
 
     // Wallet Connection & Network State
     const [selectedChainId, setSelectedChainId] = useState<number>(evmChains[0]?.id || 1);
@@ -186,6 +271,9 @@ function AuthContent() {
 
     // Image Upload Logic
     const handleFileUpload = async (file: File, type: 'avatar' | 'background') => {
+        if (type === 'avatar' && useEnsAvatar) return;
+        if (type === 'background' && useEnsBackground) return;
+
         // We need a token to upload? The backend HandleUpload checks for "Bearer token".
         // But the user is not signed up yet.
         // CHECK: specific requirements. Backend `HandleUpload` in `server.go` checks `ValidateSessionToken`.
@@ -266,6 +354,10 @@ function AuthContent() {
                 description: formData.description,
                 background_url: formData.background_url,
                 twitter_handle: formData.twitter_handle,
+                use_ens_avatar: useEnsAvatar,
+                use_ens_background: useEnsBackground,
+                use_ens_description: useEnsDescription,
+                use_ens_username: useEnsUsername,
             };
 
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/auth/signup`, {
@@ -397,58 +489,88 @@ function AuthContent() {
                             {/* Images Row */}
                             <div className="relative group mx-auto w-full">
                                 {/* Background Image */}
-                                <div
-                                    className="w-full h-48 rounded-2xl bg-black/50 border border-white/5 overflow-hidden cursor-pointer relative transition-all hover:border-white/10"
-                                    onClick={() => (formData.signup_token) && document.getElementById('bg-upload')?.click()}
-                                >
-                                    {formData.background_url ? (
-                                        <img src={formData.background_url} alt="Background" className="w-full h-full object-cover transition-opacity group-hover:opacity-75" />
-                                    ) : (
-                                        <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600 gap-2">
-                                            <FileText size={32} />
-                                            <span className="text-xs font-bold uppercase tracking-wider">Upload Cover</span>
-                                        </div>
-                                    )}
-
-                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <div className="bg-black/50 backdrop-blur-sm p-3 rounded-full border border-white/10">
-                                            <Upload className="text-white" size={24} />
-                                        </div>
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center px-1">
+                                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Cover Image</label>
+                                        <FieldSettings
+                                            label="Cover"
+                                            hasDNS={!!ensHeader}
+                                            useDNS={useEnsBackground}
+                                            onToggle={setUseEnsBackground}
+                                        />
                                     </div>
-                                    <input
-                                        id="bg-upload"
-                                        type="file"
-                                        accept="image/*"
-                                        className="hidden"
-                                        onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'background')}
-                                    />
+                                    <div
+                                        className={`w-full h-48 rounded-2xl bg-black/50 border overflow-hidden relative transition-all ${useEnsBackground ? "border-purple-500/50 cursor-default" : "border-white/5 cursor-pointer hover:border-white/10"}`}
+                                        onClick={() => !useEnsBackground && formData.signup_token && document.getElementById('bg-upload')?.click()}
+                                    >
+                                        {formData.background_url ? (
+                                            <img src={formData.background_url} alt="Background" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600 gap-2">
+                                                <FileText size={32} />
+                                                <span className="text-xs font-bold uppercase tracking-wider">Upload Cover</span>
+                                            </div>
+                                        )}
+
+                                        {!useEnsBackground && (
+                                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <div className="bg-black/50 backdrop-blur-sm p-3 rounded-full border border-white/10">
+                                                    <Upload className="text-white" size={24} />
+                                                </div>
+                                            </div>
+                                        )}
+                                        <input
+                                            id="bg-upload"
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            disabled={useEnsBackground}
+                                            onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'background')}
+                                        />
+                                    </div>
                                 </div>
 
                                 {/* Avatar Image (Overlapping) */}
-                                <div
-                                    className="absolute -bottom-10 left-6 w-24 h-24 rounded-full border-4 border-black bg-zinc-900 overflow-hidden cursor-pointer group/avatar shadow-xl"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (formData.signup_token) document.getElementById('avatar-upload')?.click();
-                                    }}
-                                >
-                                    {formData.avatar_url ? (
-                                        <img src={formData.avatar_url} alt="Avatar" className="w-full h-full object-cover transition-opacity group-hover/avatar:opacity-75" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-zinc-500">
-                                            <User size={32} />
+                                <div className="absolute -bottom-10 left-6">
+                                    <div className="relative">
+                                        <div
+                                            className={`w-24 h-24 rounded-full border-4 border-black bg-zinc-900 overflow-hidden relative shadow-xl z-20 ${useEnsAvatar ? "cursor-default" : "cursor-pointer group/avatar"}`}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (!useEnsAvatar && formData.signup_token) document.getElementById('avatar-upload')?.click();
+                                            }}
+                                        >
+                                            {formData.avatar_url ? (
+                                                <img src={formData.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-zinc-500">
+                                                    <User size={32} />
+                                                </div>
+                                            )}
+                                            {!useEnsAvatar && (
+                                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity bg-black/40 backdrop-blur-[2px]">
+                                                    <Upload className="text-white" size={20} />
+                                                </div>
+                                            )}
+                                            <input
+                                                id="avatar-upload"
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                disabled={useEnsAvatar}
+                                                onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'avatar')}
+                                            />
                                         </div>
-                                    )}
-                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity bg-black/40 backdrop-blur-[2px]">
-                                        <Upload className="text-white" size={20} />
+                                        {/* Settings Button for Avatar - Absolute positioned next to it */}
+                                        <div className="absolute -right-8 top-0 bg-black/50 rounded-lg backdrop-blur-md border border-white/10">
+                                            <FieldSettings
+                                                label="Avatar"
+                                                hasDNS={!!ensAvatar}
+                                                useDNS={useEnsAvatar}
+                                                onToggle={setUseEnsAvatar}
+                                            />
+                                        </div>
                                     </div>
-                                    <input
-                                        id="avatar-upload"
-                                        type="file"
-                                        accept="image/*"
-                                        className="hidden"
-                                        onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'avatar')}
-                                    />
                                 </div>
                             </div>
                             {/* Spacer for overlapping avatar */}
@@ -456,14 +578,34 @@ function AuthContent() {
 
                             {/* Username Input */}
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Username</label>
+                                <div className="flex justify-between items-center">
+                                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Username</label>
+                                    <FieldSettings
+                                        label="Name"
+                                        hasDNS={!!ensName}
+                                        useDNS={useEnsUsername}
+                                        onToggle={(val) => {
+                                            setUseEnsUsername(val);
+                                            if (val && ensName) {
+                                                setFormData(prev => ({ ...prev, username: ensName }));
+                                                setUsernameError("");
+                                            }
+                                        }}
+                                    />
+                                </div>
                                 <div className="relative">
                                     <input
                                         type="text"
                                         placeholder="e.g. Satoshi"
                                         value={formData.username}
                                         onChange={handleUsernameChange}
-                                        className={`w-full bg-zinc-950 border rounded-xl p-4 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-zinc-600 ${usernameError ? "border-red-500 focus:border-red-500" : "border-zinc-800 focus:border-blue-500"}`}
+                                        disabled={useEnsUsername}
+                                        className={`w-full bg-zinc-950 border rounded-xl p-4 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-zinc-600 ${useEnsUsername
+                                            ? "border-purple-500/50 text-purple-200 cursor-not-allowed bg-purple-900/10"
+                                            : usernameError
+                                                ? "border-red-500 focus:border-red-500"
+                                                : "border-zinc-800 focus:border-blue-500"
+                                            }`}
                                     />
                                     {ensName && formData.username === ensName && (
                                         <div className="absolute right-4 top-1/2 -translate-y-1/2 text-green-500">
@@ -486,6 +628,33 @@ function AuthContent() {
                                         )}
                                     </p>
                                 )}
+                            </div>
+
+                            {/* Description Input */}
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Description</label>
+                                    <FieldSettings
+                                        label="Bio"
+                                        hasDNS={!!ensDescription}
+                                        useDNS={useEnsDescription}
+                                        onToggle={(val) => {
+                                            setUseEnsDescription(val);
+                                            if (val && ensDescription) setFormData(prev => ({ ...prev, description: ensDescription }));
+                                        }}
+                                    />
+                                </div>
+                                <textarea
+                                    placeholder="Tell us about yourself..."
+                                    value={formData.description}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                                    disabled={useEnsDescription}
+                                    rows={3}
+                                    className={`w-full bg-zinc-950 border rounded-xl p-4 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-zinc-600 resize-none ${useEnsDescription
+                                        ? "border-purple-500/50 text-purple-200 cursor-not-allowed bg-purple-900/10"
+                                        : "border-zinc-800 focus:border-blue-500"
+                                        }`}
+                                />
                             </div>
 
                             {/* Network Selection */}

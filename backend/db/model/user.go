@@ -27,4 +27,8 @@ type User struct {
 	TwitchUsername     *string   `json:"twitch_username"`
 	TwitterHandle      string    `json:"twitter_handle"`
 	TikTokID           *string   `json:"tiktok_id" gorm:"uniqueIndex"`
+	UseEnsAvatar       bool      `json:"use_ens_avatar" gorm:"default:false"`
+	UseEnsBackground   bool      `json:"use_ens_background" gorm:"default:false"`
+	UseEnsDescription  bool      `json:"use_ens_description" gorm:"default:false"`
+	UseEnsUsername     bool      `json:"use_ens_username" gorm:"default:false"`
 }
