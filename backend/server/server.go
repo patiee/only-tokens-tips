@@ -685,6 +685,12 @@ func (s *Server) HandleTip(c *gin.Context) {
 		return
 	}
 
+	// Validate Message Length (Min 27 chars)
+	if len(tip.Message) < 27 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Message must be at least 27 characters long"})
+		return
+	}
+
 	// Delegate processing to Service
 	success, msg, err := s.service.ProcessTip(tip, claims)
 	if err != nil {

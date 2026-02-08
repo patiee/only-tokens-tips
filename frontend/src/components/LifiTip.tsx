@@ -382,16 +382,21 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
                 <div className="space-y-2">
                     <div className="flex justify-between items-center">
                         <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Message</label>
-                        <span className="text-[10px] font-bold text-zinc-600">{message.length}/500</span>
+                        <span className={`text-[10px] font-bold ${message.length < 27 ? "text-red-400" : "text-zinc-600"}`}>
+                            {message.length} / 27 min
+                        </span>
                     </div>
                     <textarea
-                        placeholder="Write your tip message here..."
+                        placeholder="Write your tip message here... (min 27 chars)"
                         value={message}
                         maxLength={500}
                         onChange={(e) => {
                             if (e.target.value.length <= 500) setMessage(e.target.value);
                         }}
-                        className="w-full bg-zinc-900/30 border border-white/5 rounded-2xl p-5 text-white focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500/50 outline-none transition-all placeholder:text-zinc-700 resize-none h-32 text-sm font-medium leading-relaxed"
+                        className={`w-full bg-zinc-900/30 border rounded-2xl p-5 text-white focus:ring-2 outline-none transition-all placeholder:text-zinc-700 resize-none h-32 text-sm font-medium leading-relaxed ${message.length > 0 && message.length < 27
+                            ? "border-red-500/20 focus:ring-red-500/20 focus:border-red-500/50"
+                            : "border-white/5 focus:ring-purple-500/20 focus:border-purple-500/50"
+                            }`}
                     />
                 </div>
 
@@ -581,7 +586,7 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
                         <>
                             <button
                                 onClick={handleTip}
-                                disabled={loading || !amount || parseFloat(amount) <= 0}
+                                disabled={loading || !amount || parseFloat(amount) <= 0 || message.length < 27}
                                 className="w-full py-4 rounded-xl bg-white hover:bg-zinc-200 transition-all duration-200 text-black font-bold text-lg uppercase tracking-wide active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
                             >
                                 {loading ? (
