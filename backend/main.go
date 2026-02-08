@@ -41,6 +41,12 @@ func main() {
 	}
 
 	// Config
+	// Frontend URL
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
+	}
+
 	config := server.Config{
 		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
@@ -57,6 +63,7 @@ func main() {
 		MinIOSecretKey:     os.Getenv("MINIO_SECRET_KEY"),
 		MinIOUseSSL:        os.Getenv("MINIO_USE_SSL") == "true",
 		EthRPCURL:          os.Getenv("ETH_RPC_URL"),
+		FrontendURL:        frontendURL,
 	}
 
 	// Init and Start Server

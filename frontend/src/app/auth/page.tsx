@@ -329,7 +329,8 @@ function AuthContent() {
         uploadData.append("file", file);
 
         try {
-            const url = new URL(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/upload`);
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+            const url = new URL(`${apiUrl}/api/upload`, window.location.href);
             if (type === 'avatar') url.searchParams.append("type", "avatar");
 
             const res = await fetch(url.toString(), {

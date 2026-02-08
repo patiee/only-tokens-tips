@@ -33,7 +33,9 @@ services:
       - TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID}
       - TWITCH_CLIENT_SECRET=${TWITCH_CLIENT_SECRET}
       - KICK_CLIENT_ID=${KICK_CLIENT_ID}
+      - KICK_CLIENT_ID=${KICK_CLIENT_ID}
       - KICK_CLIENT_SECRET=${KICK_CLIENT_SECRET}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
     restart: always
 
   db:

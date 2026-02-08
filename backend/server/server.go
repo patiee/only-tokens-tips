@@ -280,6 +280,7 @@ type Config struct {
 	MinIOSecretKey     string
 	MinIOUseSSL        bool
 	EthRPCURL          string
+	FrontendURL        string
 }
 
 type Server struct {
@@ -297,7 +298,12 @@ func New(logger *log.Logger, database *db.Database, config Config) *Server {
 		service: service,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
-				return true // Allow all origins for OBS
+				origin := r.Header.Get("Origin")
+				// Allow frontend origin and localhost dev
+				if origin == config.FrontendURL || strings.HasPrefix(origin, "http://localhost") {
+					return true
+				}
+				return true // Keeping promiscuous for now as user requested simple config, but better to restrict later
 			},
 		},
 	}

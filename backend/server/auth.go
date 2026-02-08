@@ -164,14 +164,15 @@ func (s *Service) HandleOAuthCallback(c *gin.Context, provider string) {
 	token, err := config.Exchange(context.Background(), code)
 	if err != nil {
 		s.logger.Printf("OAuth exchange error: %v", err)
-		c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/auth?error=oauth_failed")
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/auth?error=oauth_failed", s.config.FrontendURL))
 		return
 	}
 
 	userProfile, err := s.fetchUserProfile(provider, token.AccessToken, s.logger)
 	if err != nil {
 		s.logger.Printf("Failed to fetch profile: %v", err)
-		c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/auth?error=profile_failed")
+		s.logger.Printf("Failed to fetch profile: %v", err)
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/auth?error=profile_failed", s.config.FrontendURL))
 		return
 	}
 
@@ -180,7 +181,7 @@ func (s *Service) HandleOAuthCallback(c *gin.Context, provider string) {
 		userID, err := s.ValidateLinkState(state)
 		if err != nil {
 			s.logger.Printf("Invalid link state: %v", err)
-			c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/me/settings?error=invalid_link_state")
+			c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/me/settings?error=invalid_link_state", s.config.FrontendURL))
 			return
 		}
 
@@ -188,11 +189,11 @@ func (s *Service) HandleOAuthCallback(c *gin.Context, provider string) {
 		err = s.db.LinkProvider(userID, provider, userProfile.ID, userProfile.Name)
 		if err != nil {
 			s.logger.Printf("Failed to link provider: %v", err)
-			c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/me/settings?error=link_failed_or_taken", "http://localhost:3000"))
+			c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/me/settings?error=link_failed_or_taken", s.config.FrontendURL))
 			return
 		}
 
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/me/settings?success=linked", "http://localhost:3000"))
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/me/settings?success=linked", s.config.FrontendURL))
 		return
 	}
 
@@ -212,10 +213,10 @@ func (s *Service) HandleOAuthCallback(c *gin.Context, provider string) {
 		token, err := s.GenerateSessionToken(existingUser)
 		if err != nil {
 			s.logger.Printf("Failed to generate session token: %v", err)
-			c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/auth?error=token_err")
+			c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/auth?error=token_err", s.config.FrontendURL))
 			return
 		}
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://localhost:3000/auth?token=%s", token))
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/auth?token=%s", s.config.FrontendURL, token))
 	} else {
 		// New User -> Redirect to Signup Step 2
 		signupClaims := SignupClaims{
@@ -228,12 +229,12 @@ func (s *Service) HandleOAuthCallback(c *gin.Context, provider string) {
 		signupToken, err := s.GenerateSignupToken(signupClaims)
 		if err != nil {
 			s.logger.Printf("Failed to generate signup token: %v", err)
-			c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/auth?error=token_err")
+			c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/auth?error=token_err", s.config.FrontendURL))
 			return
 		}
 
 		// Redirect to Signup Page with Token
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://localhost:3000/auth?step=2&signup_token=%s", signupToken))
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/auth?step=2&signup_token=%s", s.config.FrontendURL, signupToken))
 	}
 }
 

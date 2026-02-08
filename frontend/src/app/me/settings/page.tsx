@@ -99,7 +99,8 @@ export default function SettingsPage() {
             return;
         }
 
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/me?token=${token}`)
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        fetch(`${apiUrl}/api/me?token=${token}`)
             .then(res => {
                 if (res.ok) return res.json();
                 throw new Error("Failed to fetch profile");
@@ -144,7 +145,8 @@ export default function SettingsPage() {
 
         const token = localStorage.getItem("user_token");
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/me/profile`, {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+            const res = await fetch(`${apiUrl}/api/me/profile`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
@@ -177,7 +179,8 @@ export default function SettingsPage() {
         if (!token) return;
 
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/auth/${provider}/login?link=true`, {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+            const res = await fetch(`${apiUrl}/auth/${provider}/login?link=true`, {
                 headers: {
                     "Authorization": `Bearer ${token}`
                 }
@@ -233,7 +236,8 @@ export default function SettingsPage() {
         formData.append("file", file);
 
         try {
-            const url = new URL(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/upload`);
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+            const url = new URL(`${apiUrl}/api/upload`, window.location.href);
             if (type === 'avatar') url.searchParams.append("type", "avatar");
 
             const res = await fetch(url.toString(), {
