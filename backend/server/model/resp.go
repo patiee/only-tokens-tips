@@ -22,6 +22,7 @@ type TipNotification struct {
 	Sender     string `json:"sender"`
 	Message    string `json:"message"`
 	Amount     string `json:"amount"`
+	AvatarURL  string `json:"avatarUrl"`
 }
 
 type UserProfile struct {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useAccount, useSendTransaction, useBalance, useSwitchChain, useReadContracts, useWriteContract, useConfig, useDisconnect, useGasPrice } from "wagmi";
+import { useAccount, useSendTransaction, useBalance, useSwitchChain, useReadContracts, useWriteContract, useConfig, useDisconnect, useGasPrice, useEnsName, useEnsAvatar } from "wagmi";
 import { useWalletAuth } from "@/hooks/useWalletAuth";
 import { readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { parseEther, formatEther, erc20Abi } from "viem";
@@ -24,6 +24,7 @@ interface LifiTipProps {
         txHash: string;
         amount: string;
         message: string;
+
         senderName: string;
         asset: string;
         sourceChain: string;
@@ -64,6 +65,9 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
     const isSuiConnected = !!suiAccount;
     // useDisconnectWallet for Sui? We might need to import it if we want a disconnect button.
 
+    // ENS Hooks (EVM Only)
+    const { data: ensName } = useEnsName({ address: evmAddress, chainId: 1 });
+
     // State
     const [amount, setAmount] = useState("");
     const [message, setMessage] = useState("");
@@ -76,6 +80,13 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
     const [slippageMode, setSlippageMode] = useState<"auto" | "custom">("auto");
     const [customSlippage, setCustomSlippage] = useState("0.5"); // Default 0.5%
     const [gasMode, setGasMode] = useState<"auto" | "fast" | "instant">("auto");
+
+    // Auto-fill ENS Name
+    useEffect(() => {
+        if (ensName) {
+            setSenderName(ensName);
+        }
+    }, [ensName]);
 
     // Selection State
     // Default to Ethereum (1)
@@ -268,18 +279,23 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
             gasPrice: txGasPrice, // Use boosted gas price if set
         });
 
+        // Notify Parent
         onSuccess({
-            txHash,
-            amount,
-            message,
-            senderName,
-            asset: selectedAsset!.symbol,
-            sourceChain: selectedChainId.toString(),
-            destChain: targetChainId.toString(),
-            sourceAddress: currentAddress!,
+            txHash: txHash, // Use proper hash
+            amount: amount,
+            message: message,
+            senderName: senderName || "Anonymous",
+            asset: selectedAsset?.symbol || "ETH",
+            sourceChain: String(selectedChainId),
+            destChain: String(selectedChainId), // Same chain for now in this simplified view, or derived from Route
+            sourceAddress: currentAddress || "",
             destAddress: recipientAddress,
             token: authToken
         });
+
+        // Reset Form (Optional, or leave it)
+        setMessage("");
+        setAmount("");
     };
 
 

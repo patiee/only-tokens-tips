@@ -14,7 +14,9 @@ export interface TipData {
     sender: string;
     amount: string;
     message: string;
+
     actionText?: string;
+    avatarUrl?: string;
 }
 
 interface TipWidgetProps {
@@ -44,7 +46,7 @@ export const TipWidget = ({ tip, config, isPreview = false }: TipWidgetProps) =>
             <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white/20 shadow-md shrink-0">
                     <img
-                        src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}&backgroundColor=b6e3f4,c0aede,d1d4f9`}
+                        src={tip.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}&backgroundColor=b6e3f4,c0aede,d1d4f9`}
                         alt="Avatar"
                         className="w-full h-full bg-zinc-800 object-cover"
                     />
