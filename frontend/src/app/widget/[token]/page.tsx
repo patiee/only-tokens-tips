@@ -43,7 +43,7 @@ export default function WidgetPage() {
 
     // Fetch Widget Config
     useEffect(() => {
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://earth-charleston-firms-horn.trycloudflare.com'}/api/widget/${token}/config`)
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/widget/${token}/config`)
             .then(res => res.json())
             .then(data => {
                 if (data.username) {
@@ -61,7 +61,7 @@ export default function WidgetPage() {
 
     // WebSocket Connection - Ingests into Queue
     useEffect(() => {
-        const wsUrl = (process.env.NEXT_PUBLIC_API_URL || 'https://earth-charleston-firms-horn.trycloudflare.com').replace("http", "ws") + `/ws/${token}`;
+        const wsUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace("http", "ws") + `/ws/${token}`;
         let socket: WebSocket | null = null;
         let retryTimeout: NodeJS.Timeout;
         let isMounted = true;

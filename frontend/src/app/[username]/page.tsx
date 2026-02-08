@@ -39,7 +39,7 @@ export default function TipPage() {
     // Fetch streamer details
     useEffect(() => {
         const safeUsername = decodeURIComponent(username);
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://earth-charleston-firms-horn.trycloudflare.com'}/api/user/${safeUsername}`)
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/user/${safeUsername}`)
             .then(res => {
                 if (!res.ok) throw new Error("User not found");
                 return res.json();
@@ -64,7 +64,7 @@ export default function TipPage() {
         enableEnsTwitter: boolean;
     }) => {
         if (!data.txHash) return;
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://earth-charleston-firms-horn.trycloudflare.com'}/api/tip`, {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/tip`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

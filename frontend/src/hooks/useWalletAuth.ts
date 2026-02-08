@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useAccount, useSignMessage } from 'wagmi';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://earth-charleston-firms-horn.trycloudflare.com';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 export function useWalletAuth() {
     const { address } = useAccount();

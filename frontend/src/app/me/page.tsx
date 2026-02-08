@@ -44,7 +44,7 @@ function DashboardContent() {
         }
 
         setError("");
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://earth-charleston-firms-horn.trycloudflare.com'}/api/me?token=` + token)
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/me?token=` + token)
             .then(res => {
                 if (!res.ok) {
                     if (res.status === 401) throw new Error("Unauthorized (Invalid Token)");
@@ -65,7 +65,7 @@ function DashboardContent() {
 
         // Fetch Recent Tips
         // Use default limit=10, no cursor for initial load
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://earth-charleston-firms-horn.trycloudflare.com'}/api/me/tips?limit=10`, {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/me/tips?limit=10`, {
             headers: {
                 "Authorization": `Bearer ${token}`
             }
@@ -127,7 +127,7 @@ function DashboardContent() {
                 </p>
 
                 <div className="flex gap-3 justify-center">
-                    <a href={`${process.env.NEXT_PUBLIC_API_URL || 'https://earth-charleston-firms-horn.trycloudflare.com'}/api/me`} target="_blank" className="px-4 py-2 bg-zinc-800 rounded hover:bg-zinc-700 text-sm">
+                    <a href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/me`} target="_blank" className="px-4 py-2 bg-zinc-800 rounded hover:bg-zinc-700 text-sm">
                         Test Connection
                     </a>
                     <button

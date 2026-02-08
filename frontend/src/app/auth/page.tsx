@@ -185,7 +185,7 @@ function AuthContent() {
     }, [searchParams, router]);
 
     const handleSocialLogin = (provider: string) => {
-        window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'https://earth-charleston-firms-horn.trycloudflare.com'}/auth/${provider}/login`;
+        window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/auth/${provider}/login`;
     };
 
     const validateUsername = (username: string) => {
@@ -243,7 +243,7 @@ function AuthContent() {
 
             setIsCheckingUsername(true);
             try {
-                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://earth-charleston-firms-horn.trycloudflare.com'}/api/user/${username}`);
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/user/${username}`);
                 if (res.ok) {
                     // 200 means user exists
                     setUsernameError("Username is already taken");
@@ -391,7 +391,7 @@ function AuthContent() {
                 use_ens_username: useEnsUsername,
             };
 
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://earth-charleston-firms-horn.trycloudflare.com'}/api/auth/signup`, {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/auth/signup`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(body)
@@ -798,7 +798,7 @@ function WalletLoginButton({ setStep, setFormData, onOpenEVM, onOpenSolana, onOp
                 signature = await signFn();
             }
 
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://earth-charleston-firms-horn.trycloudflare.com'}/api/auth/wallet/login`, {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/auth/wallet/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
