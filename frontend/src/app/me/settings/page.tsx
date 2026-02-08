@@ -426,7 +426,7 @@ export default function SettingsPage() {
                                     <button
                                         type="submit"
                                         disabled={saving}
-                                        className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-blue-900/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="w-full flex items-center justify-center gap-2 bg-white hover:bg-zinc-200 text-black uppercase tracking-wide font-bold py-3 px-6 rounded-xl transition-all shadow-lg hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {saving ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
                                         Save Changes

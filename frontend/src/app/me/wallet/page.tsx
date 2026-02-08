@@ -290,7 +290,7 @@ function WalletsContent() {
                                 disabled={saving || !canSave}
                                 className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${saving || !canSave
                                     ? "bg-zinc-800/50 text-zinc-500 cursor-not-allowed"
-                                    : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-900/20"
+                                    : "bg-white hover:bg-zinc-200 text-black uppercase tracking-wide shadow-lg"
                                     }`}
                             >
                                 {saving ? (
