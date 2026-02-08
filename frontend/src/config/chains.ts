@@ -14,7 +14,7 @@ export interface CustomChainConfig extends Omit<ChainConfig, 'metamask'> {
 
 export const nonEvmChains: CustomChainConfig[] = [
     {
-        id: 100001,
+        id: 20000000000001,
         name: 'Bitcoin',
         key: 'btc',
         logoURI: 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png',
@@ -24,11 +24,11 @@ export const nonEvmChains: CustomChainConfig[] = [
             decimals: 8,
             name: 'Bitcoin',
             logoURI: 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png',
-            address: '0x0000000000000000000000000000000000000000'
+            address: 'bitcoin'
         }
     },
     {
-        id: 100002,
+        id: 1151111081099710,
         name: 'Solana',
         key: 'sol',
         logoURI: 'https://assets.coingecko.com/coins/images/4128/small/solana.png',
@@ -42,7 +42,7 @@ export const nonEvmChains: CustomChainConfig[] = [
         }
     },
     {
-        id: 100003,
+        id: 9270000000000000,
         name: 'Sui',
         key: 'sui',
         logoURI: 'https://assets.coingecko.com/coins/images/26375/small/sui_asset.jpeg',

@@ -7,6 +7,7 @@ import { LifiTip } from "@/components/LifiTip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ArrowLeft, ExternalLink, Globe, Twitter, Twitch } from "lucide-react";
 import Link from "next/link";
+import { allChains, ChainFamily } from "@/config/chains";
 
 // Define interface matching backend/db/model/model.go
 interface PublicUserProfile {
@@ -14,8 +15,8 @@ interface PublicUserProfile {
     username: string;
     wallet_address: string;
     avatar_url: string;
-    preferred_chain_id?: number;
-    preferred_asset_address?: string;
+    preferred_chain_id: number;
+    preferred_asset_address: string;
     description?: string;
     background_url?: string;
     provider?: string;

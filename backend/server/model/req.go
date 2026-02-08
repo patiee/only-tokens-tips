@@ -22,7 +22,7 @@ type SignupRequest struct {
 	SignupToken           string `json:"signup_token"`
 	WalletAddress         string `json:"wallet_address"`
 	MainWallet            bool   `json:"main_wallet"`
-	PreferredChainID      int    `json:"preferred_chain_id"`
+	PreferredChainID      int64  `json:"preferred_chain_id"`
 	PreferredAssetAddress string `json:"preferred_asset_address"`
 	AvatarURL             string `json:"avatar_url"`
 	Description           string `json:"description"`
@@ -44,7 +44,7 @@ type UpdateWidgetRequest struct {
 
 type UpdateWalletRequest struct {
 	WalletAddress         string `json:"wallet_address" binding:"required"`
-	PreferredChainID      int    `json:"preferred_chain_id"`
+	PreferredChainID      int64  `json:"preferred_chain_id"`
 	PreferredAssetAddress string `json:"preferred_asset_address"`
 }
 

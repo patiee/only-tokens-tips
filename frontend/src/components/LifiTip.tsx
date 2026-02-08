@@ -38,8 +38,8 @@ interface LifiTipProps {
         enableEnsTwitter: boolean;
     }) => void;
     onStatus: (status: string) => void;
-    preferredChainId?: number;
-    preferredAssetAddress?: string;
+    preferredChainId: number;
+    preferredAssetAddress: string;
     widgetConfig?: {
         tts_enabled: boolean;
         background_color: string;
@@ -215,14 +215,9 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
         if (!btcAddress) throw new Error("Bitcoin wallet not connected");
         onStatus("Fetching BTC quote...");
 
-        // Destination: Base (8453) for now, similar to EVM flow.
-        const targetChainId = 8453;
-        // From: BTC, To: USDC on Base (or ETH?)
-        // Let's use USDC on Base as stable target? Or ETH?
-        // handleEVMTip used 0x0...0 (ETH) as fromToken. Use 'BTC' for fromToken.
-        // For toToken, stick to USDC or ETH. USDC is safer for value preservation? 
-        // handleEVMTip uses 0x000 (Native) as toToken. Let's use Native ETH on Base.
-        const toToken = "0x0000000000000000000000000000000000000000";
+        // Destination: Use preferredChainId
+        const targetChainId = preferredChainId;
+        const toToken = preferredAssetAddress;
 
         let slippageDecimal = "0.005";
         if (slippageMode === "custom" && customSlippage) {
@@ -234,9 +229,9 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
         const satsAmount = Math.floor(parseFloat(amount) * 100000000).toString();
 
         const params = new URLSearchParams({
-            fromChain: "BTC", // Li.Fi uses 'BTC' for Bitcoin chain ID
+            fromChain: "20000000000001", // Bitcoin standardized ID
             toChain: targetChainId.toString(),
-            fromToken: "BTC", // Li.Fi uses 'BTC' for native Bitcoin token
+            fromToken: "bitcoin", // Bitcoin standardized address
             toToken: toToken,
             toAddress: recipientAddress,
             fromAmount: satsAmount,
@@ -276,7 +271,7 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
             senderName: useEnsNameFlag && ensName ? ensName : (senderName || "Anonymous"),
             asset: "BTC",
             sourceChain: "bitcoin",
-            destChain: "8453", // Base
+            destChain: targetChainId.toString(),
             sourceAddress: btcAddress,
             destAddress: recipientAddress,
             token: authToken,
@@ -303,22 +298,23 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
 
         onStatus("Fetching SOL quote...");
 
-        // Destination: Base (8453)
-        const targetChainId = 8453;
-        const toToken = "0x0000000000000000000000000000000000000000"; // Native ETH on Base
+        // Destination: Use preferredChainId 
+        const targetChainId = preferredChainId;
+        const toToken = preferredAssetAddress;
 
         let slippageDecimal = "0.005";
         if (slippageMode === "custom" && customSlippage) {
             slippageDecimal = (parseFloat(customSlippage) / 100).toString();
         }
 
-        // Amount: SOL has 9 decimals.
-        const lamports = Math.floor(parseFloat(amount) * 1000000000).toString();
+        // Amount: Use selectedAsset decimals
+        const decimals = selectedAsset?.decimals || 9;
+        const lamports = Math.floor(parseFloat(amount) * Math.pow(10, decimals)).toString();
 
         const params = new URLSearchParams({
-            fromChain: "SOL",
+            fromChain: "1151111081099710", // Solana standardized ID
             toChain: targetChainId.toString(),
-            fromToken: "SOL",
+            fromToken: selectedAsset?.address || "11111111111111111111111111111111",
             toToken: toToken,
             toAddress: recipientAddress,
             fromAmount: lamports,
@@ -365,9 +361,9 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
                 amount: amount,
                 message: message,
                 senderName: useEnsNameFlag && ensName ? ensName : (senderName || "Anonymous"),
-                asset: "SOL",
+                asset: selectedAsset?.symbol || "SOL",
                 sourceChain: "solana",
-                destChain: "8453", // Base
+                destChain: targetChainId.toString(),
                 sourceAddress: solanaPublicKey.toBase58(),
                 destAddress: recipientAddress,
                 token: authToken,
@@ -385,49 +381,74 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
 
     const handleSuiTip = async (authToken: string) => {
         if (!suiAccount) throw new Error("Sui wallet not connected");
-        onStatus("Preparing SUI Transaction...");
+
+        onStatus("Fetching LI.FI route...");
 
         const decimals = 9; // SUI
-        // Use BigInt for safety
-        const amountMist = BigInt(Math.floor(parseFloat(amount) * Math.pow(10, decimals)));
-        // Dummy Treasury Address for Demo (Valid 32-byte hex)
-        const treasuryAddress = "0x7d20dcdb2bca4f508ea9613994683eb4e76e9c4ed27464022c9438e54d6404bd";
+        const amountMist = BigInt(
+            Math.floor(parseFloat(amount) * 10 ** decimals)
+        ).toString();
 
-        const tx = new Transaction();
-        const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(amountMist)]);
-        tx.transferObjects([coin], tx.pure.address(treasuryAddress));
+        // 1️⃣ Get quote + tx from LI.FI
+        const quoteRes = await fetch("https://li.quest/v1/quote", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                fromChain: "9270000000000000",          // Sui
+                fromToken: "0x2::sui::SUI",              // Native SUI
+                fromAmount: amountMist,
+                fromAddress: suiAccount.address,
 
-        onStatus("Signing SUI Transaction...");
-        try {
-            const result = await signAndExecuteTransaction({
-                transaction: tx,
-                chain: 'sui:mainnet',
-            });
+                toChain: "8453",                         // Base
+                toToken: "0x0000000000000000000000000000000000000000", // native ETH
+                toAddress: recipientAddress,
+            }),
+        });
 
-
-
-            onSuccess({
-                txHash: result.digest,
-                amount: amount,
-                message: message,
-                senderName: useEnsNameFlag && ensName ? ensName : (senderName || "Anonymous"),
-                asset: "SUI",
-                sourceChain: "sui",
-                destChain: "8453", // Base (Simulation)
-                sourceAddress: suiAccount.address,
-                destAddress: recipientAddress,
-                token: authToken,
-                enableEnsAvatar: useEnsNameFlag && useEnsAvatarFlag,
-                enableEnsBackground: useEnsNameFlag && useEnsBackgroundFlag,
-                enableEnsTwitter: useEnsNameFlag && useEnsTwitterFlag,
-            });
-
-            setMessage("");
-            setAmount("");
-        } catch (e: any) {
-            throw new Error("Sui Transaction Failed: " + (e.message || e));
+        if (!quoteRes.ok) {
+            throw new Error("Failed to fetch LI.FI quote");
         }
+
+        const quote = await quoteRes.json();
+
+        // 2️⃣ Extract Sui transaction block
+        const lifiTx = quote.transactionRequest;
+
+        if (!lifiTx) {
+            throw new Error("LI.FI did not return a Sui transaction");
+        }
+
+        onStatus("Signing & executing bridge transaction...");
+
+        // 3️⃣ Sign & execute LI.FI transaction
+        const result = await signAndExecuteTransaction({
+            transaction: lifiTx,
+            chain: "sui:mainnet",
+        });
+
+        onSuccess({
+            txHash: result.digest,
+            amount,
+            message,
+            senderName:
+                useEnsNameFlag && ensName
+                    ? ensName
+                    : senderName || "Anonymous",
+            asset: selectedAsset?.symbol || "SUI",
+            sourceChain: String(selectedChainId),
+            destChain: String(selectedChainId),
+            sourceAddress: currentAddress || "",
+            destAddress: recipientAddress,
+            token: authToken,
+            enableEnsAvatar: useEnsNameFlag && useEnsAvatarFlag,
+            enableEnsBackground: useEnsNameFlag && useEnsBackgroundFlag,
+            enableEnsTwitter: useEnsNameFlag && useEnsTwitterFlag,
+        });
+
+        setMessage("");
+        setAmount("");
     };
+
 
     const handleEVMTip = async (authToken: string) => {
         if (evmChain?.id !== selectedChainId) {
@@ -438,8 +459,8 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
         onStatus("Fetching quote...");
 
         const fromToken = selectedAsset!.address;
-        const toToken = "0x0000000000000000000000000000000000000000";
-        const targetChainId = 8453;
+        const toToken = preferredAssetAddress;
+        const targetChainId = preferredChainId;
 
         let slippageDecimal = "0.005";
         if (slippageMode === "custom" && customSlippage) {

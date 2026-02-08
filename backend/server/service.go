@@ -457,7 +457,7 @@ func (s *Service) GetEnrichedProfile(userID uint) (*dbmodel.User, error) {
 	return user, nil
 }
 
-func (s *Service) UpdateUserWallet(userID uint, walletAddress string, chainID int, assetAddress string) error {
+func (s *Service) UpdateUserWallet(userID uint, walletAddress string, chainID int64, assetAddress string) error {
 	return s.db.UpdateUserWallet(userID, walletAddress, chainID, assetAddress)
 }
 

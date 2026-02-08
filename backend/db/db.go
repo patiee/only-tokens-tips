@@ -125,11 +125,11 @@ func (d *Database) GetUserByWidgetToken(token string) (*model.User, error) {
 	return &user, nil
 }
 
-func (d *Database) UpdateUserWallet(userID uint, walletAddress string, chainID int, assetAddress string) error {
+func (d *Database) UpdateUserWallet(userID uint, wallet string, chainID int64, asset string) error {
 	updates := map[string]interface{}{
-		"eth_address":        walletAddress,
+		"eth_address":        wallet,
 		"preferred_chain_id": chainID,
-		"preferred_asset":    assetAddress,
+		"preferred_asset":    asset,
 	}
 	return d.conn.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
 }
