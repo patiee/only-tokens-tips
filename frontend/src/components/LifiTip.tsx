@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useAccount, useSendTransaction, useBalance, useSwitchChain, useReadContracts, useWriteContract, useConfig, useDisconnect, useGasPrice, useEnsName, useEnsAvatar, useEnsText } from "wagmi";
 import { useWalletAuth } from "@/hooks/useWalletAuth";
 import { readContract, waitForTransactionReceipt } from "wagmi/actions";
-import { parseEther, formatEther, erc20Abi } from "viem";
+import { parseEther, formatEther, erc20Abi, parseUnits } from "viem";
 import { mainnet, base } from "wagmi/chains";
 import { Check, ChevronDown, Wallet, Coins, AlertTriangle, Settings, X } from "lucide-react";
 import { allChains, ChainFamily } from "@/config/chains";
@@ -473,7 +473,7 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
             fromToken: fromToken,
             toToken: toToken,
             toAddress: recipientAddress,
-            fromAmount: parseEther(amount).toString(),
+            fromAmount: parseUnits(amount, selectedAsset?.decimals || 18).toString(),
             fromAddress: currentAddress!,
             integrator: process.env.NEXT_PUBLIC_LIFI_INTEGRATOR || "stream-tips",
             fee: "0.01",

@@ -36,7 +36,7 @@ export function useWalletAuth() {
             const signature = await signMessageAsync({ message });
 
             // 4. Call Backend
-            const res = await fetch(`${API_URL}/auth/wallet-login`, {
+            const res = await fetch(`${API_URL}/api/auth/wallet/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
