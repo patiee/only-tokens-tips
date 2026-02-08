@@ -6,7 +6,7 @@
   "scripts": {
     "fetch-networks": "node scripts/generate-chains.js",
     "dev": "next dev",
-    "build": "npm run fetch-networks && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
