@@ -145,6 +145,10 @@ func (s *Server) Start(port string) {
 
 		// Debug Routes
 		api.POST("/debug/tip", s.HandleDebugTip)
+
+		// Image Proxy
+		api.GET("/images/:bucket/:filename", s.HandleServeImage)
+
 	}
 
 	// WS
@@ -253,15 +257,49 @@ func (s *Server) HandleUpload(c *gin.Context) {
 	}
 
 	// Return URL
-	// Since we are running in docker, we need to return a URL reachable by the browser.
-	// Assuming MinIO is mapped to localhost:9000
-	publicURL := fmt.Sprintf("http://localhost:9000/%s/%s", bucketName, filename)
+	// Proxy through backend
+	publicURL := fmt.Sprintf("%s/api/images/%s/%s", s.config.BackendURL, bucketName, filename)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "File uploaded successfully",
 		"url":     publicURL,
 		"size":    info.Size,
 	})
+}
+
+func (s *Server) HandleServeImage(c *gin.Context) {
+	bucket := c.Param("bucket")
+	filename := c.Param("filename")
+
+	// Security: Only allow specific buckets
+	if bucket != "images" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		return
+	}
+
+	// Get Object from MinIO
+	object, err := minioClient.GetObject(context.Background(), bucket, filename, minio.GetObjectOptions{})
+	if err != nil {
+		s.logger.Printf("Failed to get object from MinIO: %v", err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Image not found"})
+		return
+	}
+	defer object.Close()
+
+	// Check if object exists (Stat)
+	info, err := object.Stat()
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Image not found"})
+		return
+	}
+
+	// Set Headers
+	c.Header("Content-Type", info.ContentType)
+	c.Header("Content-Length", fmt.Sprintf("%d", info.Size))
+	c.Header("Cache-Control", "public, max-age=31536000") // Cache for 1 year
+
+	// Stream to response
+	http.ServeContent(c.Writer, c.Request, filename, info.LastModified, object)
 }
 
 type Config struct {
@@ -281,6 +319,7 @@ type Config struct {
 	MinIOUseSSL        bool
 	EthRPCURL          string
 	FrontendURL        string
+	BackendURL         string
 }
 
 type Server struct {
@@ -314,7 +353,7 @@ func (s *Server) InitOAuth() {
 	googleConfig = &oauth2.Config{
 		ClientID:     s.config.GoogleClientID,
 		ClientSecret: s.config.GoogleClientSecret,
-		RedirectURL:  "https://localhost:8080/auth/google/callback",
+		RedirectURL:  fmt.Sprintf("%s/auth/google/callback", s.config.BackendURL),
 		Scopes: []string{
 			"https://www.googleapis.com/auth/userinfo.email",
 			"https://www.googleapis.com/auth/userinfo.profile",
@@ -326,7 +365,7 @@ func (s *Server) InitOAuth() {
 	twitchConfig = &oauth2.Config{
 		ClientID:     s.config.TwitchClientID,
 		ClientSecret: s.config.TwitchClientSecret,
-		RedirectURL:  "https://localhost:8080/auth/twitch/callback",
+		RedirectURL:  fmt.Sprintf("%s/auth/twitch/callback", s.config.BackendURL),
 		Scopes:       []string{"user:read:email"},
 		Endpoint:     twitch.Endpoint,
 	}
@@ -335,7 +374,7 @@ func (s *Server) InitOAuth() {
 	tiktokConfig = &oauth2.Config{
 		ClientID:     s.config.TikTokClientID,
 		ClientSecret: s.config.TikTokClientSecret,
-		RedirectURL:  "https://localhost:8080/auth/tiktok/callback",
+		RedirectURL:  fmt.Sprintf("%s/auth/tiktok/callback", s.config.BackendURL),
 		Scopes:       []string{"user.info.basic"}, // Basic user info scope
 		Endpoint: oauth2.Endpoint{
 			AuthURL:  "https://www.tiktok.com/v2/oauth/authorize/",

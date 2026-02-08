@@ -47,6 +47,12 @@ func main() {
 		frontendURL = "http://localhost:3000"
 	}
 
+	// Backend URL
+	backendURL := os.Getenv("BACKEND_URL")
+	if backendURL == "" {
+		backendURL = "https://localhost:8080"
+	}
+
 	config := server.Config{
 		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
@@ -64,6 +70,7 @@ func main() {
 		MinIOUseSSL:        os.Getenv("MINIO_USE_SSL") == "true",
 		EthRPCURL:          os.Getenv("ETH_RPC_URL"),
 		FrontendURL:        frontendURL,
+		BackendURL:         backendURL,
 	}
 
 	// Init and Start Server
