@@ -96,53 +96,6 @@ export function BitcoinWalletProvider({ children }: { children: React.ReactNode 
                 setError("Phantom wallet not detected.");
                 window.open("https://phantom.app/", "_blank");
             }
-        } else if (type === "metamask") {
-            // MetaMask Snap Integration (using ShapeShift adapter or generic snap request)
-            if (typeof (window as any).ethereum !== 'undefined') {
-                try {
-                    const snapId = 'npm:@shapeshiftoss/metamask-snaps'; // Popular reliable Bitcoin snap
-                    await (window as any).ethereum.request({
-                        method: 'wallet_requestSnaps',
-                        params: {
-                            [snapId]: {},
-                        },
-                    });
-
-                    // After installing, we invoke the snap to get address
-                    // ShapeShift snap API: `btc_getAddress` probably? or `btc_getPublicKeys`?
-                    // Actually, generic snap usage is complex without SDK.
-                    // But let's try a simpler one or just Assume success for now and alert user they need to use the Snap interface if complex.
-                    // Better: use the `wallet_snap` method.
-                    // However, without the library this is brittle.
-                    // Let's force install and then just set "Connected (MetaMask Snap)" and maybe dummy address or try to get it.
-                    // To get address:
-                    const result = await (window as any).ethereum.request({
-                        method: 'wallet_invokeSnap',
-                        params: {
-                            snapId: snapId,
-                            request: { method: 'btc_getAddress', params: { scriptType: 'p2wpkh' } } // Common method?
-                        },
-                    });
-
-                    // If result has address
-                    if (result && (result as any).address) {
-                        setAddress((result as any).address);
-                        setWalletType("metamask");
-                        setIsConnected(true);
-                        localStorage.setItem("btc_wallet_type", "metamask");
-                    } else {
-                        // Fallback attempt or error
-                        // ShapeShift snap usually returns { address: string }
-                        throw new Error("Could not retrieve address from Snap");
-                    }
-
-                } catch (err: any) {
-                    console.error(err);
-                    setError("Failed to connect MetaMask Snap. support for ShapeShift snap required.");
-                }
-            } else {
-                setError("MetaMask not detected.");
-            }
         } else if (type === "xverse" || type === "leather") {
             // Xverse and Leather use sats-connect
             try {

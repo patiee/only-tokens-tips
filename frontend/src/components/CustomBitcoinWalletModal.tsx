@@ -99,22 +99,7 @@ export function CustomBitcoinWalletModal({ isOpen, onClose }: CustomBitcoinWalle
                             <div className="w-2 h-2 rounded-full bg-zinc-700 group-hover:bg-white transition-colors" />
                         </button>
 
-                        <button
-                            onClick={() => handleConnect("metamask")}
-                            className="w-full flex items-center justify-between p-4 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-all group"
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center">
-                                    {/* MetaMask Icon Placeholder (Fox-ish color) */}
-                                    <div className="w-6 h-6 bg-orange-500 rounded-sm transform rotate-45" />
-                                </div>
-                                <div className="flex flex-col items-start">
-                                    <span className="font-medium text-white">MetaMask Snap</span>
-                                    <span className="text-xs text-zinc-500">Connect using MetaMask Snap</span>
-                                </div>
-                            </div>
-                            <div className="w-2 h-2 rounded-full bg-zinc-700 group-hover:bg-orange-500 transition-colors" />
-                        </button>
+
                     </div>
                 </div>
             </div>
