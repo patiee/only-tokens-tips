@@ -58,6 +58,9 @@ export default function TipPage() {
         sourceAddress: string;
         destAddress: string;
         token: string;
+        enableEnsAvatar: boolean;
+        enableEnsBackground: boolean;
+        enableEnsTwitter: boolean;
     }) => {
         if (!data.txHash) return;
         fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/tip`, {
@@ -78,6 +81,9 @@ export default function TipPage() {
                 destChain: data.destChain,
                 sourceAddress: data.sourceAddress,
                 destAddress: data.destAddress,
+                enableEnsAvatar: data.enableEnsAvatar,
+                enableEnsBackground: data.enableEnsBackground,
+                enableEnsTwitter: data.enableEnsTwitter,
             }),
         }).catch(console.error);
     }, [username]);

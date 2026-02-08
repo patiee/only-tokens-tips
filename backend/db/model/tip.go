@@ -15,8 +15,10 @@ type Tip struct {
 	ChainID       string `json:"chain_id"`     // Chain ID where tip happened
 	SourceChain   string `json:"source_chain"` // Human readable or ChainID
 	DestChain     string `json:"dest_chain"`
-	SourceAddress string `json:"source_address"`                  // Sender wallet
-	DestAddress   string `json:"dest_address"`                    // Streamer wallet (on that chain)
-	AvatarURL     string `json:"avatar_url"`                      // ENS Avatar or other source
+	SourceAddress string `json:"source_address"` // Sender wallet
+	DestAddress   string `json:"dest_address"`   // Streamer wallet (on that chain)
+	AvatarURL     string `json:"avatar_url"`     // ENS Avatar or other source
+	BackgroundURL string `json:"background_url"` // ENS Background or other source
+	TwitterHandle string `json:"twitter_handle"`
 	Status        string `json:"status" gorm:"default:'pending'"` // pending, confirmed, failed
 }

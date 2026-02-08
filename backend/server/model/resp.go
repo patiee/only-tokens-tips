@@ -17,12 +17,14 @@ type TipResponseItem struct {
 }
 
 type TipNotification struct {
-	Type       string `json:"type"`
-	StreamerID string `json:"streamerId"`
-	Sender     string `json:"sender"`
-	Message    string `json:"message"`
-	Amount     string `json:"amount"`
-	AvatarURL  string `json:"avatarUrl"`
+	Type          string `json:"type"`
+	StreamerID    string `json:"streamerId"`
+	Sender        string `json:"sender"`
+	Message       string `json:"message"`
+	Amount        string `json:"amount"`
+	AvatarURL     string `json:"avatarUrl"`
+	BackgroundURL string `json:"backgroundUrl"`
+	TwitterHandle string `json:"twitterHandle"`
 }
 
 type UserProfile struct {

@@ -14,6 +14,8 @@ type Tip = {
     language?: string;
     actionText?: string;
     avatarUrl?: string; // Added for ENS/Custom Avatars
+    backgroundUrl?: string; // Added for ENS Backgrounds
+    twitterHandle?: string; // Added for ENS Twitter
 };
 
 export default function WidgetPage() {
@@ -85,6 +87,8 @@ export default function WidgetPage() {
                             message: data.message || "",
                             asset: data.asset || "ETH",
                             avatarUrl: data.avatarUrl || data.avatar_url, // Support both cases
+                            backgroundUrl: data.backgroundUrl || data.background_url, // Support both cases
+                            twitterHandle: data.twitterHandle || data.twitter_handle, // Support both cases
                             language: 'en'
                         };
 

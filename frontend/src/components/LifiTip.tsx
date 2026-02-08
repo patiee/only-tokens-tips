@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useAccount, useSendTransaction, useBalance, useSwitchChain, useReadContracts, useWriteContract, useConfig, useDisconnect, useGasPrice, useEnsName, useEnsAvatar } from "wagmi";
+import { useAccount, useSendTransaction, useBalance, useSwitchChain, useReadContracts, useWriteContract, useConfig, useDisconnect, useGasPrice, useEnsName, useEnsAvatar, useEnsText } from "wagmi";
 import { useWalletAuth } from "@/hooks/useWalletAuth";
 import { readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { parseEther, formatEther, erc20Abi } from "viem";
@@ -24,7 +24,6 @@ interface LifiTipProps {
         txHash: string;
         amount: string;
         message: string;
-
         senderName: string;
         asset: string;
         sourceChain: string;
@@ -32,6 +31,9 @@ interface LifiTipProps {
         sourceAddress: string;
         destAddress: string;
         token: string;
+        enableEnsAvatar: boolean;
+        enableEnsBackground: boolean;
+        enableEnsTwitter: boolean;
     }) => void;
     onStatus: (status: string) => void;
     preferredChainId?: number;
@@ -67,6 +69,9 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
 
     // ENS Hooks (EVM Only)
     const { data: ensName } = useEnsName({ address: evmAddress, chainId: 1 });
+    const { data: ensAvatarUrl } = useEnsAvatar({ name: ensName || undefined, chainId: 1, query: { enabled: !!ensName } });
+    const { data: ensHeader } = useEnsText({ name: ensName || undefined, key: 'header', chainId: 1, query: { enabled: !!ensName } });
+    const { data: ensTwitter } = useEnsText({ name: ensName || undefined, key: 'com.twitter', chainId: 1, query: { enabled: !!ensName } });
 
     // State
     const [amount, setAmount] = useState("");
@@ -75,19 +80,35 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
 
+    // ENS Toggles
+    const [useEnsNameFlag, setUseEnsNameFlag] = useState(true);
+    const [useEnsAvatarFlag, setUseEnsAvatarFlag] = useState(true);
+    const [useEnsBackgroundFlag, setUseEnsBackgroundFlag] = useState(true);
+    const [useEnsTwitterFlag, setUseEnsTwitterFlag] = useState(true);
+
     // Transaction Settings State
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [slippageMode, setSlippageMode] = useState<"auto" | "custom">("auto");
     const [customSlippage, setCustomSlippage] = useState("0.5"); // Default 0.5%
     const [gasMode, setGasMode] = useState<"auto" | "fast" | "instant">("auto");
 
-    // Auto-fill ENS Name
+    // Auto-fill ENS Name & Toggle Defaults
     useEffect(() => {
         if (ensName) {
             setSenderName(ensName);
+            setUseEnsNameFlag(true);
+            setUseEnsAvatarFlag(!!ensAvatarUrl);
+            setUseEnsBackgroundFlag(!!ensHeader);
+            setUseEnsTwitterFlag(!!ensTwitter);
+        } else {
+            setUseEnsNameFlag(false);
+            setUseEnsAvatarFlag(false);
+            setUseEnsBackgroundFlag(false);
+            setUseEnsTwitterFlag(false);
         }
-    }, [ensName]);
+    }, [ensName, ensAvatarUrl, ensHeader, ensTwitter]);
 
+    // ... (Selection State & Modal State kept same)
     // Selection State
     // Default to Ethereum (1)
     const [selectedChainId, setSelectedChainId] = useState<number>(1);
@@ -99,9 +120,9 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
     const [isBitcoinModalOpen, setIsBitcoinModalOpen] = useState(false);
     const [isSuiModalOpen, setIsSuiModalOpen] = useState(false);
 
+    // ... (rest of hooks)
     const selectedChain = allChains.find(c => c.id === selectedChainId);
 
-    // Determine active address
     const currentAddress = useMemo(() => {
         if (selectedChain?.family === ChainFamily.SOLANA) return solanaPublicKey?.toBase58();
         if (selectedChain?.family === ChainFamily.BITCOIN) return btcAddress;
@@ -116,19 +137,12 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
         return isEvmConnected;
     }, [selectedChain, isSolanaConnected, isBtcConnected, isSuiConnected, isEvmConnected]);
 
-    // Disconnect Handler
     const handleDisconnect = () => {
         if (selectedChain?.family === ChainFamily.SOLANA) disconnectSolana();
         else if (selectedChain?.family === ChainFamily.BITCOIN) disconnectBtc();
-        // else if (selectedChain?.family === ChainFamily.SUI) disconnectSui(); // Need import
         else disconnectEVM();
     };
 
-    // Auto-authenticate (Optional for Tip View? Maybe we skip auto-auth to avoid popup spam)
-    // Only verify ownership when they try to TIP.
-
-    // Balance Fetching (Only EVM implemented in hook for now, but UI shows simplified balance)
-    // We can use the existing `useBalance` for EVM.
     const { data: evmBalance } = useBalance({
         address: evmAddress,
         chainId: selectedChainId,
@@ -142,11 +156,9 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
         if (selectedChain?.family === ChainFamily.EVM && evmBalance) {
             return `${parseFloat(formatEther(evmBalance.value)).toFixed(4)} ${evmBalance.symbol}`;
         }
-        return "..."; // TODO: Implement other chain balances
+        return "...";
     }, [evmBalance, selectedChain]);
 
-
-    // Sync EVM Chain
     const handleChainSelect = async (chainId: number) => {
         setSelectedChainId(chainId);
         const newChain = allChains.find(c => c.id === chainId);
@@ -165,21 +177,15 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
         setError("");
 
         try {
-            // 1. Authenticate (Guest Mode - No Redirect)
             onStatus("Verifying Wallet...");
             let token = "";
             try {
-                // IMPORTANT: preventRedirect=true
                 const authResult = await authenticate({ preventRedirect: true });
                 token = authResult || "";
             } catch (authErr) {
                 console.error("Auth warning", authErr);
-                // Proceed even if auth fails? Or require signature?
-                // If backend requires token for /api/tip, we might fail there.
-                // But let's try to proceed.
             }
 
-            // 2. Logic based on Chain Family
             if (selectedChain?.family === ChainFamily.EVM) {
                 await handleEVMTip(token);
             } else {
@@ -196,8 +202,6 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
     };
 
     const handleEVMTip = async (authToken: string) => {
-        // ... Existing LiFi Logic ...
-        // Ensure chain
         if (evmChain?.id !== selectedChainId) {
             onStatus(`Switching to ${selectedChain?.name}...`);
             await switchChainAsync({ chainId: selectedChainId });
@@ -205,14 +209,11 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
 
         onStatus("Fetching quote...");
 
-        // Setup Params
         const fromToken = selectedAsset!.address;
-        const toToken = "0x0000000000000000000000000000000000000000"; // Target is Native (ETH)
-        // Hardcoded target chain: Base (8453)
+        const toToken = "0x0000000000000000000000000000000000000000";
         const targetChainId = 8453;
 
-        // Calculate Slippage (0.005 for 0.5%)
-        let slippageDecimal = "0.005"; // Default
+        let slippageDecimal = "0.005";
         if (slippageMode === "custom" && customSlippage) {
             slippageDecimal = (parseFloat(customSlippage) / 100).toString();
         }
@@ -238,10 +239,7 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
         if (!response.ok) throw new Error("Failed to fetch quote");
         const quote = await response.json();
 
-        // Approval Logic
         if (quote.transactionRequest.to && selectedAsset!.address !== "0x0000000000000000000000000000000000000000") {
-            // ... duplicate approval logic from before or assume helper ...
-            // Simplified for brevity in this rewrite, but essentially:
             const count = await readContract(config, {
                 address: selectedAsset!.address as `0x${string}`,
                 abi: erc20Abi,
@@ -263,10 +261,9 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
             }
         }
 
-        // Calculate Gas Price
         let txGasPrice = undefined;
         if (gasMode !== "auto" && gasPriceData) {
-            const multiplier = gasMode === "fast" ? 1.2 : 1.5; // Fast = +20%, Instant = +50%
+            const multiplier = gasMode === "fast" ? 1.2 : 1.5;
             const boostedGas = BigInt(Math.floor(Number(gasPriceData) * multiplier));
             txGasPrice = boostedGas;
         }
@@ -276,24 +273,25 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
             to: quote.transactionRequest.to,
             data: quote.transactionRequest.data,
             value: BigInt(quote.transactionRequest.value),
-            gasPrice: txGasPrice, // Use boosted gas price if set
+            gasPrice: txGasPrice,
         });
 
-        // Notify Parent
         onSuccess({
-            txHash: txHash, // Use proper hash
+            txHash: txHash,
             amount: amount,
             message: message,
-            senderName: senderName || "Anonymous",
+            senderName: useEnsNameFlag && ensName ? ensName : (senderName || "Anonymous"),
             asset: selectedAsset?.symbol || "ETH",
             sourceChain: String(selectedChainId),
-            destChain: String(selectedChainId), // Same chain for now in this simplified view, or derived from Route
+            destChain: String(selectedChainId),
             sourceAddress: currentAddress || "",
             destAddress: recipientAddress,
-            token: authToken
+            token: authToken,
+            enableEnsAvatar: useEnsNameFlag && useEnsAvatarFlag,
+            enableEnsBackground: useEnsNameFlag && useEnsBackgroundFlag,
+            enableEnsTwitter: useEnsNameFlag && useEnsTwitterFlag,
         });
 
-        // Reset Form (Optional, or leave it)
         setMessage("");
         setAmount("");
     };
@@ -398,21 +396,78 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
                 </div>
 
                 {/* Name Input */}
-                <div className="space-y-2">
+                <div className="space-y-4">
                     <div className="flex justify-between items-center">
                         <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Name</label>
                         <span className="text-[10px] font-bold text-zinc-600">{senderName.length}/20</span>
                     </div>
+
+                    {ensName && (
+                        <div className="flex flex-wrap gap-2 mb-2">
+                            {/* ENS Name Toggle */}
+                            <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${useEnsNameFlag ? "bg-purple-500/10 border-purple-500/50" : "bg-zinc-900/40 border-white/5 hover:bg-zinc-800"}`}>
+                                <input
+                                    type="checkbox"
+                                    checked={useEnsNameFlag}
+                                    onChange={(e) => {
+                                        setUseEnsNameFlag(e.target.checked);
+                                        if (e.target.checked) setSenderName(ensName);
+                                    }}
+                                    className="accent-purple-500 w-3 h-3 rounded-sm"
+                                />
+                                <span className={`text-[10px] font-bold uppercase tracking-wider ${useEnsNameFlag ? "text-purple-400" : "text-zinc-500"}`}>Use ENS Name</span>
+                            </label>
+
+                            {/* ENS Avatar Toggle */}
+                            <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${ensAvatarUrl ? "cursor-pointer" : "opacity-50 cursor-not-allowed"} ${useEnsAvatarFlag && ensAvatarUrl ? "bg-purple-500/10 border-purple-500/50" : "bg-zinc-900/40 border-white/5 hover:bg-zinc-800"}`}>
+                                <input
+                                    type="checkbox"
+                                    checked={useEnsAvatarFlag}
+                                    onChange={(e) => setUseEnsAvatarFlag(e.target.checked)}
+                                    disabled={!ensAvatarUrl}
+                                    className="accent-purple-500 w-3 h-3 rounded-sm"
+                                />
+                                <span className={`text-[10px] font-bold uppercase tracking-wider ${useEnsAvatarFlag && ensAvatarUrl ? "text-purple-400" : "text-zinc-500"}`}>Avatar</span>
+                            </label>
+
+                            {/* ENS Background Toggle */}
+                            <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${ensHeader ? "cursor-pointer" : "opacity-50 cursor-not-allowed"} ${useEnsBackgroundFlag && ensHeader ? "bg-purple-500/10 border-purple-500/50" : "bg-zinc-900/40 border-white/5 hover:bg-zinc-800"}`}>
+                                <input
+                                    type="checkbox"
+                                    checked={useEnsBackgroundFlag}
+                                    onChange={(e) => setUseEnsBackgroundFlag(e.target.checked)}
+                                    disabled={!ensHeader}
+                                    className="accent-purple-500 w-3 h-3 rounded-sm"
+                                />
+                                <span className={`text-[10px] font-bold uppercase tracking-wider ${useEnsBackgroundFlag && ensHeader ? "text-purple-400" : "text-zinc-500"}`}>Background</span>
+                            </label>
+
+                            {/* ENS Twitter Toggle */}
+                            <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${ensTwitter ? "cursor-pointer" : "opacity-50 cursor-not-allowed"} ${useEnsTwitterFlag && ensTwitter ? "bg-purple-500/10 border-purple-500/50" : "bg-zinc-900/40 border-white/5 hover:bg-zinc-800"}`}>
+                                <input
+                                    type="checkbox"
+                                    checked={useEnsTwitterFlag}
+                                    onChange={(e) => setUseEnsTwitterFlag(e.target.checked)}
+                                    disabled={!ensTwitter}
+                                    className="accent-purple-500 w-3 h-3 rounded-sm"
+                                />
+                                <span className={`text-[10px] font-bold uppercase tracking-wider ${useEnsTwitterFlag && ensTwitter ? "text-purple-400" : "text-zinc-500"}`}>Twitter</span>
+                            </label>
+                        </div>
+                    )}
+
                     <input
                         type="text"
                         placeholder="Your Name (optional)"
                         value={senderName}
                         maxLength={20}
                         onChange={(e) => {
+                            if (useEnsNameFlag) return;
                             const val = e.target.value.replace(/\./g, ""); // Remove periods
                             if (val.length <= 20) setSenderName(val);
                         }}
-                        className="w-full bg-zinc-900/30 border border-white/5 rounded-2xl p-4 text-white focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500/50 outline-none transition-all placeholder:text-zinc-700 text-sm font-bold"
+                        readOnly={useEnsNameFlag}
+                        className={`w-full bg-zinc-900/30 border border-white/5 rounded-2xl p-4 text-white focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500/50 outline-none transition-all placeholder:text-zinc-700 text-sm font-bold ${useEnsNameFlag ? "opacity-50 cursor-not-allowed" : ""}`}
                     />
                 </div>
 

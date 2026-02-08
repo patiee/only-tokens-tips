@@ -176,12 +176,14 @@ func (s *Service) NotifyWidgets(tip *dbmodel.Tip) {
 	}
 
 	notification := model.TipNotification{
-		Type:       "TIP",
-		StreamerID: tip.StreamerID,
-		Sender:     tip.Sender,
-		Message:    tip.Message,
-		Amount:     tip.Amount,
-		AvatarURL:  tip.AvatarURL,
+		Type:          "TIP",
+		StreamerID:    tip.StreamerID,
+		Sender:        tip.Sender,
+		Message:       tip.Message,
+		Amount:        tip.Amount,
+		AvatarURL:     tip.AvatarURL,
+		BackgroundURL: tip.BackgroundURL,
+		TwitterHandle: tip.TwitterHandle,
 	}
 
 	s.logger.Printf("Broadcasting notification to %s: %+v", tip.StreamerID, notification)
@@ -305,6 +307,8 @@ func (s *Service) ProcessTip(tip model.TipRequest, claims *WalletClaims) (bool, 
 	}
 
 	var avatarURL string
+	var backgroundURL string
+	var twitterHandle string
 
 	s.securityMu.Lock()
 	// 1. Rate Limit Check (1 request per 5 seconds)
@@ -316,7 +320,7 @@ func (s *Service) ProcessTip(tip model.TipRequest, claims *WalletClaims) (bool, 
 	s.lastTipReq[claims.WalletAddress] = time.Now()
 	s.securityMu.Unlock()
 
-	// 2. ENS Verification
+	// 2. ENS Verification & Metadata
 	if strings.HasSuffix(strings.ToLower(tip.Sender), ".eth") {
 		verified, err := s.VerifyENSOwnership(tip.Sender, tip.SourceAddress)
 		if err != nil {
@@ -337,27 +341,26 @@ func (s *Service) ProcessTip(tip model.TipRequest, claims *WalletClaims) (bool, 
 			}
 			avatarURL = "" // Clear potentially fake avatar
 		} else {
-			// Verified!
-			// If the user didn't provide a custom avatar (or even if they did, ENS likely takes precedence if we want to enforce it),
-			// let's try to set the ENS metadata avatar if available.
-			// Actually, frontend passes `sender_avatar` from `useEnsAvatar`.
-			// User requirement: "if the domain belongs to the sender use the avatar from ENS if exists to show in the widget"
-			// "make sure that frontend can handle this custom avatar value if comes from backend"
-
-			// We can trust the frontend's fetched avatar if the NAME is verified, OR we can overwrite it with the metadata service.
-			// Using metadata service ensures it matches the name on-chain right now.
-			// Let's set it if not empty, or overwrite.
-			// The metadata service is reliable: https://metadata.ens.domains/mainnet/avatar/<name>
-			avatarURL = fmt.Sprintf("https://metadata.ens.domains/mainnet/avatar/%s", tip.Sender)
+			// Fetch Metadata if requested
+			if tip.EnableENSAvatar || tip.EnableENSBackground || tip.EnableENSTwitter {
+				s.logger.Printf("Fetching ENS metadata for confirmed name: %s", tip.Sender)
+				metaAvatar, metaHeader, metaTwitter, err := s.fetchENSMetadata(tip.Sender)
+				if err != nil {
+					s.logger.Printf("Failed to fetch ENS metadata: %v", err)
+				} else {
+					if tip.EnableENSAvatar && metaAvatar != "" {
+						avatarURL = metaAvatar
+					}
+					if tip.EnableENSBackground && metaHeader != "" {
+						backgroundURL = metaHeader
+					}
+					if tip.EnableENSTwitter && metaTwitter != "" {
+						twitterHandle = metaTwitter
+					}
+				}
+			}
 		}
 	}
-
-	// Initial Sanity Check (Optional: Check if tx exists pending or mined)
-	// For now, we trust and verify in background to allow instant "Pending" state
-
-	// Check if this TxHash is already processed to prevent duplicate processing
-	// (Though DB unique constraint on TxHash might be better alongside ChainID)
-	// Skipped complexity for now.
 
 	// Save to DB as PENDING
 	dbTip := &dbmodel.Tip{
@@ -374,6 +377,8 @@ func (s *Service) ProcessTip(tip model.TipRequest, claims *WalletClaims) (bool, 
 		DestAddress:   tip.DestAddress,
 		Status:        "pending",
 		AvatarURL:     avatarURL,
+		BackgroundURL: backgroundURL,
+		TwitterHandle: twitterHandle,
 	}
 
 	if err := s.db.CreateTip(dbTip); err != nil {
@@ -386,6 +391,32 @@ func (s *Service) ProcessTip(tip model.TipRequest, claims *WalletClaims) (bool, 
 	go s.monitorTransaction(dbTip)
 
 	return true, "Tip received! Waiting for transaction confirmation...", nil
+}
+
+// fetchENSMetadata fetches avatar, header and twitter from enstate.rs
+func (s *Service) fetchENSMetadata(ensName string) (string, string, string, error) {
+	resp, err := http.Get(fmt.Sprintf("https://enstate.rs/n/%s", ensName))
+	if err != nil {
+		return "", "", "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return "", "", "", fmt.Errorf("API error: %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Avatar  string            `json:"avatar"`
+		Header  string            `json:"header"`
+		Records map[string]string `json:"records"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", "", "", err
+	}
+
+	twitterHandle := result.Records["com.twitter"]
+	return result.Avatar, result.Header, twitterHandle, nil
 }
 
 func (s *Service) GetTips(username string, limit int, cursor uint) ([]model.TipResponseItem, string, error) {
@@ -758,15 +789,17 @@ func (s *Service) CleanupExpiredSessions() error {
 	return s.db.CleanupExpiredSessions()
 }
 
-// func (s *Service) SendTestTip(streamerID, sender, message, amount, avatarURL string) error {
-// 	tip := &dbmodel.Tip{
-// 		StreamerID: streamerID,
-// 		Sender:     sender,
-// 		Message:    message,
-// 		Amount:     amount,
-// 		AvatarURL:  avatarURL,
-// 		Status:     "confirmed",
-// 	}
-// 	s.NotifyWidgets(tip)
-// 	return nil
-// }
+func (s *Service) SendTestTip(streamerID, sender, message, amount, avatarURL, backgroundURL, twitterHandle string) error {
+	tip := &dbmodel.Tip{
+		StreamerID:    streamerID,
+		Sender:        sender,
+		Message:       message,
+		Amount:        amount,
+		AvatarURL:     avatarURL,
+		BackgroundURL: backgroundURL,
+		TwitterHandle: twitterHandle,
+		Status:        "confirmed",
+	}
+	s.NotifyWidgets(tip)
+	return nil
+}

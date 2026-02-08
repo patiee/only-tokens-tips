@@ -1,17 +1,20 @@
 package model
 
 type TipRequest struct {
-	StreamerID    string `json:"streamerId" binding:"required"`
-	Sender        string `json:"sender" binding:"required"`
-	Message       string `json:"message"`
-	Amount        string `json:"amount" binding:"required"`
-	TxHash        string `json:"txHash" binding:"required"`
-	Asset         string `json:"asset"`
-	ChainID       string `json:"chainId"`
-	SourceChain   string `json:"sourceChain"`
-	DestChain     string `json:"destChain"`
-	SourceAddress string `json:"sourceAddress"`
-	DestAddress   string `json:"destAddress"`
+	StreamerID          string `json:"streamerId" binding:"required"`
+	Sender              string `json:"sender" binding:"required"`
+	Message             string `json:"message"`
+	Amount              string `json:"amount" binding:"required"`
+	TxHash              string `json:"txHash" binding:"required"`
+	Asset               string `json:"asset"`
+	ChainID             string `json:"chainId"`
+	SourceChain         string `json:"sourceChain"`
+	DestChain           string `json:"destChain"`
+	SourceAddress       string `json:"sourceAddress"`
+	DestAddress         string `json:"destAddress"`
+	EnableENSAvatar     bool   `json:"enableEnsAvatar"`
+	EnableENSBackground bool   `json:"enableEnsBackground"`
+	EnableENSTwitter    bool   `json:"enableEnsTwitter"`
 }
 
 type SignupRequest struct {

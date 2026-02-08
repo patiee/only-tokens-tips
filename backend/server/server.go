@@ -140,7 +140,7 @@ func (s *Server) Start(port string) {
 		api.POST("/upload", s.HandleUpload)
 
 		// Debug Routes
-		// api.POST("/debug/tip", s.HandleDebugTip)
+		api.POST("/debug/tip", s.HandleDebugTip)
 	}
 
 	// WS
@@ -612,28 +612,30 @@ func (s *Server) HandleUpdateProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Profile updated"})
 }
 
-// func (s *Server) HandleDebugTip(c *gin.Context) {
-// 	var req struct {
-// 		StreamerID string `json:"streamerId"`
-// 		Sender     string `json:"sender"`
-// 		Message    string `json:"message"`
-// 		Amount     string `json:"amount"`
-// 		AvatarURL  string `json:"avatarUrl"`
-// 	}
+func (s *Server) HandleDebugTip(c *gin.Context) {
+	var req struct {
+		StreamerID    string `json:"streamerId"`
+		Sender        string `json:"sender"`
+		Message       string `json:"message"`
+		Amount        string `json:"amount"`
+		AvatarURL     string `json:"avatarUrl"`
+		BackgroundURL string `json:"backgroundUrl"`
+		TwitterHandle string `json:"twitterHandle"`
+	}
 
-// 	if err := c.ShouldBindJSON(&req); err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
-// 		return
-// 	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
 
-// 	// Call service
-// 	if err := s.service.SendTestTip(req.StreamerID, req.Sender, req.Message, req.Amount, req.AvatarURL); err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-// 		return
-// 	}
+	// Call service
+	if err := s.service.SendTestTip(req.StreamerID, req.Sender, req.Message, req.Amount, req.AvatarURL, req.BackgroundURL, req.TwitterHandle); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
-// 	c.JSON(http.StatusOK, gin.H{"message": "Test tip sent"})
-// }
+	c.JSON(http.StatusOK, gin.H{"message": "Test tip sent"})
+}
 
 func (s *Server) HandleRegenerateWidget(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")
