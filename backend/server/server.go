@@ -3,6 +3,10 @@ package server
 import (
 	"context"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -186,6 +190,13 @@ func (s *Server) HandleUpload(c *gin.Context) {
 		return
 	}
 
+	// Enforce 5MB limit
+	const maxFileSize = 5 * 1024 * 1024 // 5MB
+	if file.Size > maxFileSize {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("File too large: %.2fMB. Max allowed is 5MB.", float64(file.Size)/(1024*1024))})
+		return
+	}
+
 	// Open the file
 	src, err := file.Open()
 	if err != nil {
@@ -193,6 +204,39 @@ func (s *Server) HandleUpload(c *gin.Context) {
 		return
 	}
 	defer src.Close()
+
+	// Validation for Avatars
+	uploadType := c.Query("type")
+	if uploadType == "avatar" {
+		// We need to read the entry file for decoding config
+		// Using a limit reader to avoid zip bombs, though image.DecodeConfig is usually safe.
+		// However, we need to seek back or reopen if we want to upload the same stream.
+		// Since src is an io.ReadSeeker (usually), we can Seek.
+
+		config, _, err := image.DecodeConfig(src)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid image format"})
+			return
+		}
+
+		// Enforce 600x600 maximum
+		if config.Width > 600 || config.Height > 600 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Image too large: %dx%d. Max allowed is 600x600.", config.Width, config.Height)})
+			return
+		}
+
+		// Enforce 1:1 Aspect Ratio (Square)
+		if config.Width != config.Height {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Image must be square (1:1 aspect ratio). Current: %dx%d.", config.Width, config.Height)})
+			return
+		}
+
+		// Seek back to start for upload
+		if _, err := src.Seek(0, 0); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process image stream"})
+			return
+		}
+	}
 
 	// Generate unique filename
 	ext := filepath.Ext(file.Filename)

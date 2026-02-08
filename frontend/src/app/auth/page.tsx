@@ -298,11 +298,41 @@ function AuthContent() {
             return;
         }
 
+        if (file.size > 5 * 1024 * 1024) {
+            alert("File too large. Maximum size allowed is 5MB.");
+            return;
+        }
+
+        if (type === 'avatar') {
+            const isValid = await new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const isSquare = img.width === img.height;
+                    const isSmallEnough = img.width <= 600 && img.height <= 600;
+                    if (!isSquare) {
+                        alert(`Avatar must be square (1:1 aspect ratio). Current: ${img.width}x${img.height}`);
+                        resolve(false);
+                    } else if (!isSmallEnough) {
+                        alert(`Avatar too large: ${img.width}x${img.height}. Max 600x600 allowed.`);
+                        resolve(false);
+                    } else {
+                        resolve(true);
+                    }
+                };
+                img.onerror = () => resolve(false);
+                img.src = URL.createObjectURL(file);
+            });
+            if (!isValid) return;
+        }
+
         const uploadData = new FormData();
         uploadData.append("file", file);
 
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/upload`, {
+            const url = new URL(`${process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8080'}/api/upload`);
+            if (type === 'avatar') url.searchParams.append("type", "avatar");
+
+            const res = await fetch(url.toString(), {
                 method: "POST",
                 headers: {
                     "Authorization": `Bearer ${token}`
