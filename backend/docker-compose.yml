@@ -34,8 +34,8 @@ services:
       - KICK_CLIENT_SECRET=${KICK_CLIENT_SECRET}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
       - BACKEND_URL=${BACKEND_URL:-https://localhost:8080}
-      - CERT_FILE=/app/certs/server.crt
-      - KEY_FILE=/app/certs/server.key
+      # - CERT_FILE=/app/certs/server.crt
+      # - KEY_FILE=/app/certs/server.key
     restart: always
 
   db:

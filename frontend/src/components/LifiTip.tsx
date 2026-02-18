@@ -228,7 +228,7 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
         // Li.Fi fromAmount should be in smallest unit (Sats). 1 BTC = 10^8 Sats.
         const satsAmount = Math.floor(parseFloat(amount) * 100000000).toString();
 
-        const params = new URLSearchParams({
+        const payload = {
             fromChain: "20000000000001", // Bitcoin standardized ID
             toChain: targetChainId.toString(),
             fromToken: "bitcoin", // Bitcoin standardized address
@@ -236,16 +236,20 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
             toAddress: recipientAddress,
             fromAmount: satsAmount,
             fromAddress: btcAddress,
-            integrator: process.env.NEXT_PUBLIC_LIFI_INTEGRATOR || "stream-tips",
             fee: "0.01",
             slippage: slippageDecimal,
+        };
+
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+        const response = await fetch(`${backendUrl}/api/lifi/quote`, {
+            method: "POST",
+            headers: {
+                'accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
         });
 
-        const apiKey = process.env.NEXT_PUBLIC_LIFI_API_KEY;
-        const headers: HeadersInit = { 'accept': 'application/json' };
-        if (apiKey) headers['x-lifi-api-key'] = apiKey;
-
-        const response = await fetch(`https://li.quest/v1/quote?${params.toString()}`, { headers });
         if (!response.ok) {
             const errData = await response.json();
             throw new Error("Li.Fi Quote Failed: " + (errData.message || response.statusText));
@@ -311,7 +315,7 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
         const decimals = selectedAsset?.decimals || 9;
         const lamports = Math.floor(parseFloat(amount) * Math.pow(10, decimals)).toString();
 
-        const params = new URLSearchParams({
+        const payload = {
             fromChain: "1151111081099710", // Solana standardized ID
             toChain: targetChainId.toString(),
             fromToken: selectedAsset?.address || "11111111111111111111111111111111",
@@ -319,16 +323,21 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
             toAddress: recipientAddress,
             fromAmount: lamports,
             fromAddress: solanaPublicKey.toBase58(),
-            integrator: process.env.NEXT_PUBLIC_LIFI_INTEGRATOR || "stream-tips",
             fee: "0.01",
             slippage: slippageDecimal,
+        };
+
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+        const response = await fetch(`${backendUrl}/api/lifi/quote`, {
+            method: "POST",
+            headers: {
+                'accept': 'application/json',
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify(payload)
         });
 
-        const apiKey = process.env.NEXT_PUBLIC_LIFI_API_KEY;
-        const headers: HeadersInit = { 'accept': 'application/json' };
-        if (apiKey) headers['x-lifi-api-key'] = apiKey;
-
-        const response = await fetch(`https://li.quest/v1/quote?${params.toString()}`, { headers });
         if (!response.ok) {
             const errData = await response.json();
             throw new Error("Li.Fi Quote Failed: " + (errData.message || response.statusText));
@@ -390,9 +399,13 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
         ).toString();
 
         // 1️⃣ Get quote + tx from LI.FI
-        const quoteRes = await fetch("https://li.quest/v1/quote", {
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+        const quoteRes = await fetch(`${backendUrl}/api/lifi/quote`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${authToken}`
+            },
             body: JSON.stringify({
                 fromChain: "9270000000000000",          // Sui
                 fromToken: "0x2::sui::SUI",              // Native SUI
@@ -467,7 +480,7 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
             slippageDecimal = (parseFloat(customSlippage) / 100).toString();
         }
 
-        const params = new URLSearchParams({
+        const payload = {
             fromChain: selectedChainId.toString(),
             toChain: targetChainId.toString(),
             fromToken: fromToken,
@@ -475,16 +488,20 @@ export function LifiTip({ recipientAddress, onSuccess, onStatus, preferredChainI
             toAddress: recipientAddress,
             fromAmount: parseUnits(amount, selectedAsset?.decimals || 18).toString(),
             fromAddress: currentAddress!,
-            integrator: process.env.NEXT_PUBLIC_LIFI_INTEGRATOR || "stream-tips",
             fee: "0.01",
             slippage: slippageDecimal,
+        };
+
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+        const response = await fetch(`${backendUrl}/api/lifi/quote`, {
+            method: "POST",
+            headers: {
+                'accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
         });
 
-        const apiKey = process.env.NEXT_PUBLIC_LIFI_API_KEY;
-        const headers: HeadersInit = { 'accept': 'application/json' };
-        if (apiKey) headers['x-lifi-api-key'] = apiKey;
-
-        const response = await fetch(`https://li.quest/v1/quote?${params.toString()}`, { headers });
         if (!response.ok) throw new Error("Failed to fetch quote");
         const quote = await response.json();
 

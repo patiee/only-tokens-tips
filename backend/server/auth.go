@@ -13,8 +13,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
 	"github.com/mr-tron/base58"
-	"github.com/patiee/backend/server/model"
 	"golang.org/x/oauth2"
+
+	"github.com/patiee/backend/server/model"
 )
 
 func (s *Service) HandleOAuthLogin(c *gin.Context, provider string) {

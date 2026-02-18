@@ -1,12 +1,15 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"io"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -18,11 +21,12 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/patiee/backend/db"
-	"github.com/patiee/backend/server/model"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"golang.org/x/oauth2/twitch"
+
+	"github.com/patiee/backend/db"
+	"github.com/patiee/backend/server/model"
 )
 
 var (
@@ -149,6 +153,8 @@ func (s *Server) Start(port string) {
 		// Image Proxy
 		api.GET("/images/:bucket/:filename", s.HandleServeImage)
 
+		// Li.Fi Proxy
+		api.Any("/lifi/*path", s.HandleLifiProxy)
 	}
 
 	// WS
@@ -320,6 +326,8 @@ type Config struct {
 	EthRPCURL          string
 	FrontendURL        string
 	BackendURL         string
+	LifiAPIKey         string
+	LifiIntegrator     string
 }
 
 type Server struct {
@@ -783,19 +791,125 @@ func (s *Server) HandleTip(c *gin.Context) {
 	if err != nil {
 		// Technical Error
 		s.logger.Printf("ProcessTip error: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process tip. Please try again."})
 		return
 	}
 
 	if !success {
-		// Logic Error / Validation Failed
-		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		// Logic Error (Rate limit, Blacklist, etc)
+		c.JSON(http.StatusForbidden, gin.H{"error": msg})
 		return
 	}
 
-	// Success
-	s.logger.Printf("New tip processed: %+v", tip)
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": msg})
+	c.JSON(http.StatusOK, gin.H{"message": msg})
+}
+
+func (s *Server) HandleLifiProxy(c *gin.Context) {
+	// 1. Get Path
+	proxyPath := c.Param("path")
+	if proxyPath == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing proxy path"})
+		return
+	}
+
+	// Auth Check
+	authHeader := c.GetHeader("Authorization")
+	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid token"})
+		return
+	}
+	tokenString := authHeader[7:]
+
+	// User requested "wallet token session" validation
+	_, err := s.service.ValidateWalletToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid wallet session"})
+		return
+	}
+
+	// 2. Construct Target URL
+	targetURL := fmt.Sprintf("https://li.quest/v1%s", proxyPath)
+	if c.Request.URL.RawQuery != "" {
+		targetURL += "?" + c.Request.URL.RawQuery
+	}
+
+	// 3. Process Body (Inject Integrator)
+	var bodyReader io.Reader = c.Request.Body
+	if c.Request.Method == http.MethodPost || c.Request.Method == http.MethodPut {
+		bodyBytes, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read request body"})
+			return
+		}
+
+		// If body exists and is JSON, inject integrator
+		if len(bodyBytes) > 0 {
+			var bodyMap map[string]interface{}
+			if err := json.Unmarshal(bodyBytes, &bodyMap); err == nil {
+				// Inject Integrator if configured
+				if s.config.LifiIntegrator != "" {
+					bodyMap["integrator"] = s.config.LifiIntegrator
+				}
+
+				newBodyBytes, err := json.Marshal(bodyMap)
+				if err != nil {
+					s.logger.Printf("Failed to marshal proxy body: %v", err)
+					// Fallback to original body if marshalling fails (unlikely)
+					bodyReader = bytes.NewReader(bodyBytes)
+				} else {
+					bodyReader = bytes.NewReader(newBodyBytes)
+				}
+			} else {
+				// Not JSON or invalid, just forward as is
+				bodyReader = bytes.NewReader(bodyBytes)
+			}
+		}
+	}
+
+	// 4. Create Request
+	req, err := http.NewRequest(c.Request.Method, targetURL, bodyReader)
+	if err != nil {
+		s.logger.Printf("Failed to create proxy request: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Proxy error"})
+		return
+	}
+
+	// 5. Copy Headers (Auth, Content-Type, etc.)
+	// We might want to filter some headers, but copying most is usually fine for a transparent proxy.
+	// IMPORTANT: Inject API Key
+	req.Header = c.Request.Header.Clone()
+	if s.config.LifiAPIKey != "" {
+		req.Header.Set("x-lifi-api-key", s.config.LifiAPIKey)
+	}
+	// Remove Host header to avoid issues
+	req.Header.Del("Host")
+	// Update Content-Length since body might have changed
+	req.ContentLength = -1
+
+	// 6. Execute Request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		s.logger.Printf("Failed to execute proxy request to %s: %v", targetURL, err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Upstream error"})
+		return
+	}
+	defer resp.Body.Close()
+
+	// 7. Copy Response Headers
+	for k, v := range resp.Header {
+		c.Writer.Header()[k] = v
+	}
+
+	// 8. Copy Status Code
+	c.Status(resp.StatusCode)
+
+	// 9. Copy Body
+	// Improve: Use io.CopyBuffer for efficiency if needed, but io.Copy is standard
+	_, err = io.Copy(c.Writer, resp.Body)
+	if err != nil {
+		s.logger.Printf("Failed to copy proxy response: %v", err)
+	}
 }
 
 func (s *Server) HandleGetTips(c *gin.Context) {

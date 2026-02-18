@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/joho/godotenv"
+
 	"github.com/patiee/backend/db"
 	"github.com/patiee/backend/server"
 )
@@ -71,6 +72,8 @@ func main() {
 		EthRPCURL:          os.Getenv("ETH_RPC_URL"),
 		FrontendURL:        frontendURL,
 		BackendURL:         backendURL,
+		LifiAPIKey:         os.Getenv("LIFI_API_KEY"),
+		LifiIntegrator:     os.Getenv("LIFI_INTEGRATOR"),
 	}
 
 	// Init and Start Server

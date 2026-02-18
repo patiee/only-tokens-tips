@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gorilla/websocket"
+
 	"github.com/patiee/backend/db"
 	dbmodel "github.com/patiee/backend/db/model"
 	"github.com/patiee/backend/server/model"
